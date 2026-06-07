@@ -1,0 +1,90 @@
+[
+  {
+    "doc": "check_finance.docx",
+    "source": "source_finance.docx",
+    "kind": "contradicted",
+    "location": {
+      "kind": "paragraph",
+      "index": 2
+    },
+    "tampered_value": "140 миллионов рублей",
+    "note": "Изменено число: выручка 152 -> 140 миллионов рублей (тип number)."
+  },
+  {
+    "doc": "check_finance.docx",
+    "source": "source_finance.docx",
+    "kind": "internal_conflict",
+    "location": {
+      "kind": "paragraph",
+      "index": 6
+    },
+    "tampered_value": "9 миллионов рублей",
+    "note": "Внутреннее расхождение: премиальный фонд назван 7 млн в одном абзаце и 9 млн в другом (тип number)."
+  },
+  {
+    "doc": "check_project.pptx",
+    "source": "source_project.pptx",
+    "kind": "contradicted",
+    "location": {
+      "kind": "slide",
+      "index": 2
+    },
+    "tampered_value": "30 ноября 2025 года",
+    "note": "Заменена дата: запуск 15 сентября -> 30 ноября 2025 (тип date)."
+  },
+  {
+    "doc": "check_project.pptx",
+    "source": "source_project.pptx",
+    "kind": "contradicted",
+    "location": {
+      "kind": "slide",
+      "index": 3
+    },
+    "tampered_value": "Бюджет проекта превышен на 3 миллиона рублей.",
+    "note": "Вставлено утверждение, противоречащее источнику (в источнике бюджет не превышен) (тип statement)."
+  },
+  {
+    "doc": "check_hr.pdf",
+    "source": "source_hr.pdf",
+    "kind": "contradicted",
+    "location": {
+      "kind": "page",
+      "index": 1
+    },
+    "tampered_value": "Павел Смирнов",
+    "note": "Заменено имя: Игорь Смирнов -> Павел Смирнов, что противоречит источнику (тип name)."
+  },
+  {
+    "doc": "check_hr.pdf",
+    "source": "source_hr.pdf",
+    "kind": "contradicted",
+    "location": {
+      "kind": "page",
+      "index": 1
+    },
+    "tampered_value": "110000 рублей",
+    "note": "Изменено число: оклад 95000 -> 110000 рублей (тип number)."
+  },
+  {
+    "doc": "check_estimate.docx",
+    "source": "source_estimate.docx",
+    "kind": "contradicted",
+    "location": {
+      "kind": "paragraph",
+      "index": 4
+    },
+    "tampered_value": "36 месяцев",
+    "note": "Изменено число: гарантийный срок 24 -> 36 месяцев (тип number)."
+  },
+  {
+    "doc": "check_estimate.docx",
+    "source": "source_estimate.docx",
+    "kind": "internal_conflict",
+    "location": {
+      "kind": "paragraph",
+      "index": 5
+    },
+    "tampered_value": "520 тысяч рублей",
+    "note": "Внутреннее расхождение: общая сумма договора названа 480 тыс. в одном абзаце и 520 тыс. в другом (тип number)."
+  }
+]
