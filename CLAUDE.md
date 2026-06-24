@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-ВериДок — локальный сервис проверки достоверности корпоративных документов (ITMO 1st-year practice project, MVP). По загруженному документу (PDF/DOCX/PPTX) он извлекает атомарные проверяемые утверждения, сверяет каждое с доверенными источниками через RAG (вердикт supported / contradicted / not_found с цитатой), ищет внутренние противоречия и показывает отчёт в Streamlit. Интерфейс и документы — **русские**. Всё считается **локально**, без облачных API. Полное ТЗ и инструкции по запуску — в [README.md](README.md).
+ВериДок — локальный сервис проверки достоверности корпоративных документов (магистерская практика, ITMO; индустриальный партнёр — **Сбер**; MVP). По загруженному документу (PDF/DOCX/PPTX) он извлекает атомарные проверяемые утверждения, сверяет каждое с доверенными источниками через RAG (вердикт supported / contradicted / not_found с цитатой), ищет внутренние противоречия и показывает отчёт в Streamlit. Интерфейс и документы — **русские**. Всё считается **локально**, без облачных API. Полное ТЗ и инструкции по запуску — в [README.md](README.md).
 
 ## Commands
 
@@ -42,8 +42,8 @@ pytest tests/test_llm_json.py::test_retries_then_succeeds   # один тест
 
 ### Conventions and gotchas (требуют чтения нескольких файлов)
 
-- **LLM — раннер-агностичен.** Код общается с OpenAI-совместимым `/v1/chat/completions` по `LLM_BASE_URL`/`LLM_MODEL`; конкретный сервинг (mlx-vlm, Ollama и т.п.) — деталь окружения, в коде её нет.
-- **Эмбеддинги — только через `sentence-transformers`, НЕ через `mlx-lm`** (тот не поддерживает embedding-модели). Запросы кодируются с инструкцией (`embed_query` использует `prompt_name="query"` с ручным фолбэк-префиксом), документы — без неё.
+- **LLM — раннер- и модель-агностичен.** Код общается с OpenAI-совместимым `/v1/chat/completions` по `LLM_BASE_URL`/`LLM_MODEL`; конкретный сервинг (Ollama по умолчанию; mlx-vlm и т.п.) и модель — деталь окружения. Дефолт — `qwen3-coder:30b` через Ollama (лучший результат на корпусе оценки: recall/precision/F1 = 1.0); альтернатива — `T-lite-it-2.1` (GigaChat — той же сменой `LLM_MODEL`). Сравнение — [eval/MODEL_COMPARISON.md](eval/MODEL_COMPARISON.md).
+- **Эмбеддер — Qwen3-Embedding-8B (dim 4096), два бэкенда** ([embedder.py](veridoc/embedder.py)): `ollama` (`qwen3-embedding:8b`, по умолчанию, через `/v1/embeddings`) или `sentence-transformers` (`Qwen/Qwen3-Embedding-8B`, `device=mps`). Запросы кодируются с инструкцией (prompt/префикс), документы — без неё. НЕ через `mlx-lm` (он не поддерживает embedding-модели).
 - **Промпты подставляются через `str.replace`, а НЕ `.format`** ([prompts.py](veridoc/prompts.py)): шаблоны содержат литеральные фигурные скобки JSON-примеров, которые сломали бы `.format`.
 - **`chat_json` после `retries` бросает `json.JSONDecodeError`** (а не возвращает безопасное значение). `extract.py`/`verify.py`/`consistency.py` ловят его и деградируют мягко (пропуск сегмента / `not_found` / пустой список), поэтому один битый ответ LLM не валит весь прогон — в т.ч. в CLI.
 - **Каждая находка несёт `location`** (`{"kind": "page"|"slide"|"paragraph", "index": int}`); форматирование «Где» в UI и CLI завязано на это.

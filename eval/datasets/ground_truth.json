@@ -1,90 +1,1298 @@
-[
-  {
-    "doc": "check_finance.docx",
-    "source": "source_finance.docx",
-    "kind": "contradicted",
-    "location": {
-      "kind": "paragraph",
-      "index": 2
-    },
-    "tampered_value": "140 миллионов рублей",
-    "note": "Изменено число: выручка 152 -> 140 миллионов рублей (тип number)."
+{
+  "meta": {
+    "seed": 42,
+    "docs": 16,
+    "clean_docs": 3,
+    "errors_total": 78,
+    "not_found_cases": 13,
+    "per_error_doc": {
+      "numeric": 2,
+      "claim": 2,
+      "internal": 2,
+      "notfound": 1
+    }
   },
-  {
-    "doc": "check_finance.docx",
-    "source": "source_finance.docx",
-    "kind": "internal_conflict",
-    "location": {
-      "kind": "paragraph",
-      "index": 6
+  "documents": [
+    {
+      "doc": "check_000_финансовый.docx",
+      "source": "source_000_финансовый.docx",
+      "format": "docx",
+      "clean": true
     },
-    "tampered_value": "9 миллионов рублей",
-    "note": "Внутреннее расхождение: премиальный фонд назван 7 млн в одном абзаце и 9 млн в другом (тип number)."
-  },
-  {
-    "doc": "check_project.pptx",
-    "source": "source_project.pptx",
-    "kind": "contradicted",
-    "location": {
-      "kind": "slide",
-      "index": 2
+    {
+      "doc": "check_001_план.pptx",
+      "source": "source_001_план.pptx",
+      "format": "pptx",
+      "clean": true
     },
-    "tampered_value": "30 ноября 2025 года",
-    "note": "Заменена дата: запуск 15 сентября -> 30 ноября 2025 (тип date)."
-  },
-  {
-    "doc": "check_project.pptx",
-    "source": "source_project.pptx",
-    "kind": "contradicted",
-    "location": {
-      "kind": "slide",
-      "index": 3
+    {
+      "doc": "check_002_кадровая.pdf",
+      "source": "source_002_кадровая.pdf",
+      "format": "pdf",
+      "clean": true
     },
-    "tampered_value": "Бюджет проекта превышен на 3 миллиона рублей.",
-    "note": "Вставлено утверждение, противоречащее источнику (в источнике бюджет не превышен) (тип statement)."
-  },
-  {
-    "doc": "check_hr.pdf",
-    "source": "source_hr.pdf",
-    "kind": "contradicted",
-    "location": {
-      "kind": "page",
-      "index": 1
+    {
+      "doc": "check_003_смета.docx",
+      "source": "source_003_смета.docx",
+      "format": "docx",
+      "clean": false
     },
-    "tampered_value": "Павел Смирнов",
-    "note": "Заменено имя: Игорь Смирнов -> Павел Смирнов, что противоречит источнику (тип name)."
-  },
-  {
-    "doc": "check_hr.pdf",
-    "source": "source_hr.pdf",
-    "kind": "contradicted",
-    "location": {
-      "kind": "page",
-      "index": 1
+    {
+      "doc": "check_004_логистический.pptx",
+      "source": "source_004_логистический.pptx",
+      "format": "pptx",
+      "clean": false
     },
-    "tampered_value": "110000 рублей",
-    "note": "Изменено число: оклад 95000 -> 110000 рублей (тип number)."
-  },
-  {
-    "doc": "check_estimate.docx",
-    "source": "source_estimate.docx",
-    "kind": "contradicted",
-    "location": {
-      "kind": "paragraph",
-      "index": 4
+    {
+      "doc": "check_005_отчёт.pdf",
+      "source": "source_005_отчёт.pdf",
+      "format": "pdf",
+      "clean": false
     },
-    "tampered_value": "36 месяцев",
-    "note": "Изменено число: гарантийный срок 24 -> 36 месяцев (тип number)."
-  },
-  {
-    "doc": "check_estimate.docx",
-    "source": "source_estimate.docx",
-    "kind": "internal_conflict",
-    "location": {
-      "kind": "paragraph",
-      "index": 5
+    {
+      "doc": "check_006_маркетинговый.docx",
+      "source": "source_006_маркетинговый.docx",
+      "format": "docx",
+      "clean": false
     },
-    "tampered_value": "520 тысяч рублей",
-    "note": "Внутреннее расхождение: общая сумма договора названа 480 тыс. в одном абзаце и 520 тыс. в другом (тип number)."
-  }
-]
+    {
+      "doc": "check_007_производственная.pptx",
+      "source": "source_007_производственная.pptx",
+      "format": "pptx",
+      "clean": false
+    },
+    {
+      "doc": "check_008_финансовый.pdf",
+      "source": "source_008_финансовый.pdf",
+      "format": "pdf",
+      "clean": false
+    },
+    {
+      "doc": "check_009_план.docx",
+      "source": "source_009_план.docx",
+      "format": "docx",
+      "clean": false
+    },
+    {
+      "doc": "check_010_кадровая.pptx",
+      "source": "source_010_кадровая.pptx",
+      "format": "pptx",
+      "clean": false
+    },
+    {
+      "doc": "check_011_смета.pdf",
+      "source": "source_011_смета.pdf",
+      "format": "pdf",
+      "clean": false
+    },
+    {
+      "doc": "check_012_логистический.docx",
+      "source": "source_012_логистический.docx",
+      "format": "docx",
+      "clean": false
+    },
+    {
+      "doc": "check_013_отчёт.pptx",
+      "source": "source_013_отчёт.pptx",
+      "format": "pptx",
+      "clean": false
+    },
+    {
+      "doc": "check_014_маркетинговый.pdf",
+      "source": "source_014_маркетинговый.pdf",
+      "format": "pdf",
+      "clean": false
+    },
+    {
+      "doc": "check_015_производственная.docx",
+      "source": "source_015_производственная.docx",
+      "format": "docx",
+      "clean": false
+    }
+  ],
+  "errors": [
+    {
+      "doc": "check_003_смета.docx",
+      "source": "source_003_смета.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "percent",
+      "location": {
+        "kind": "paragraph",
+        "index": 4
+      },
+      "tampered_value": "29 процентов"
+    },
+    {
+      "doc": "check_003_смета.docx",
+      "source": "source_003_смета.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "money",
+      "location": {
+        "kind": "paragraph",
+        "index": 5
+      },
+      "tampered_value": "489 тысяч рублей"
+    },
+    {
+      "doc": "check_003_смета.docx",
+      "source": "source_003_смета.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "fact",
+      "location": {
+        "kind": "paragraph",
+        "index": 6
+      },
+      "tampered_value": "отклонено"
+    },
+    {
+      "doc": "check_003_смета.docx",
+      "source": "source_003_смета.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "name",
+      "location": {
+        "kind": "paragraph",
+        "index": 7
+      },
+      "tampered_value": "Наталья Гусева"
+    },
+    {
+      "doc": "check_003_смета.docx",
+      "source": "source_003_смета.docx",
+      "format": "docx",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "number",
+      "location": {
+        "kind": "paragraph",
+        "index": 9
+      },
+      "tampered_value": "1099 единиц"
+    },
+    {
+      "doc": "check_003_смета.docx",
+      "source": "source_003_смета.docx",
+      "format": "docx",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "money",
+      "location": {
+        "kind": "paragraph",
+        "index": 11
+      },
+      "tampered_value": "1080 тысяч рублей"
+    },
+    {
+      "doc": "check_003_смета.docx",
+      "source": "source_003_смета.docx",
+      "format": "docx",
+      "kind": "not_found",
+      "error_type": "not_found",
+      "subtype": "number",
+      "location": {
+        "kind": "paragraph",
+        "index": 12
+      },
+      "tampered_value": "608 единиц"
+    },
+    {
+      "doc": "check_004_логистический.pptx",
+      "source": "source_004_логистический.pptx",
+      "format": "pptx",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "number",
+      "location": {
+        "kind": "slide",
+        "index": 4
+      },
+      "tampered_value": "446 единиц"
+    },
+    {
+      "doc": "check_004_логистический.pptx",
+      "source": "source_004_логистический.pptx",
+      "format": "pptx",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "percent",
+      "location": {
+        "kind": "slide",
+        "index": 5
+      },
+      "tampered_value": "47 процентов"
+    },
+    {
+      "doc": "check_004_логистический.pptx",
+      "source": "source_004_логистический.pptx",
+      "format": "pptx",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "name",
+      "location": {
+        "kind": "slide",
+        "index": 6
+      },
+      "tampered_value": "Сергей Поляков"
+    },
+    {
+      "doc": "check_004_логистический.pptx",
+      "source": "source_004_логистический.pptx",
+      "format": "pptx",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "name",
+      "location": {
+        "kind": "slide",
+        "index": 7
+      },
+      "tampered_value": "Юлия Седова"
+    },
+    {
+      "doc": "check_004_логистический.pptx",
+      "source": "source_004_логистический.pptx",
+      "format": "pptx",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "money",
+      "location": {
+        "kind": "slide",
+        "index": 9
+      },
+      "tampered_value": "382 тысяч рублей"
+    },
+    {
+      "doc": "check_004_логистический.pptx",
+      "source": "source_004_логистический.pptx",
+      "format": "pptx",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "money",
+      "location": {
+        "kind": "slide",
+        "index": 11
+      },
+      "tampered_value": "343 тысяч рублей"
+    },
+    {
+      "doc": "check_004_логистический.pptx",
+      "source": "source_004_логистический.pptx",
+      "format": "pptx",
+      "kind": "not_found",
+      "error_type": "not_found",
+      "subtype": "number",
+      "location": {
+        "kind": "slide",
+        "index": 12
+      },
+      "tampered_value": "714 единиц"
+    },
+    {
+      "doc": "check_005_отчёт.pdf",
+      "source": "source_005_отчёт.pdf",
+      "format": "pdf",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "number",
+      "location": {
+        "kind": "page",
+        "index": 4
+      },
+      "tampered_value": "994 единиц"
+    },
+    {
+      "doc": "check_005_отчёт.pdf",
+      "source": "source_005_отчёт.pdf",
+      "format": "pdf",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "number",
+      "location": {
+        "kind": "page",
+        "index": 5
+      },
+      "tampered_value": "463 единиц"
+    },
+    {
+      "doc": "check_005_отчёт.pdf",
+      "source": "source_005_отчёт.pdf",
+      "format": "pdf",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "fact",
+      "location": {
+        "kind": "page",
+        "index": 6
+      },
+      "tampered_value": "отклонено"
+    },
+    {
+      "doc": "check_005_отчёт.pdf",
+      "source": "source_005_отчёт.pdf",
+      "format": "pdf",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "fact",
+      "location": {
+        "kind": "page",
+        "index": 7
+      },
+      "tampered_value": "отклонено"
+    },
+    {
+      "doc": "check_005_отчёт.pdf",
+      "source": "source_005_отчёт.pdf",
+      "format": "pdf",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "number",
+      "location": {
+        "kind": "page",
+        "index": 9
+      },
+      "tampered_value": "1154 единиц"
+    },
+    {
+      "doc": "check_005_отчёт.pdf",
+      "source": "source_005_отчёт.pdf",
+      "format": "pdf",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "number",
+      "location": {
+        "kind": "page",
+        "index": 11
+      },
+      "tampered_value": "977 единиц"
+    },
+    {
+      "doc": "check_005_отчёт.pdf",
+      "source": "source_005_отчёт.pdf",
+      "format": "pdf",
+      "kind": "not_found",
+      "error_type": "not_found",
+      "subtype": "number",
+      "location": {
+        "kind": "page",
+        "index": 12
+      },
+      "tampered_value": "819 единиц"
+    },
+    {
+      "doc": "check_006_маркетинговый.docx",
+      "source": "source_006_маркетинговый.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "percent",
+      "location": {
+        "kind": "paragraph",
+        "index": 4
+      },
+      "tampered_value": "50 процентов"
+    },
+    {
+      "doc": "check_006_маркетинговый.docx",
+      "source": "source_006_маркетинговый.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "number",
+      "location": {
+        "kind": "paragraph",
+        "index": 5
+      },
+      "tampered_value": "1133 единиц"
+    },
+    {
+      "doc": "check_006_маркетинговый.docx",
+      "source": "source_006_маркетинговый.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "fact",
+      "location": {
+        "kind": "paragraph",
+        "index": 6
+      },
+      "tampered_value": "отклонено"
+    },
+    {
+      "doc": "check_006_маркетинговый.docx",
+      "source": "source_006_маркетинговый.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "fact",
+      "location": {
+        "kind": "paragraph",
+        "index": 7
+      },
+      "tampered_value": "отклонено"
+    },
+    {
+      "doc": "check_006_маркетинговый.docx",
+      "source": "source_006_маркетинговый.docx",
+      "format": "docx",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "number",
+      "location": {
+        "kind": "paragraph",
+        "index": 9
+      },
+      "tampered_value": "750 единиц"
+    },
+    {
+      "doc": "check_006_маркетинговый.docx",
+      "source": "source_006_маркетинговый.docx",
+      "format": "docx",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "number",
+      "location": {
+        "kind": "paragraph",
+        "index": 11
+      },
+      "tampered_value": "461 единиц"
+    },
+    {
+      "doc": "check_006_маркетинговый.docx",
+      "source": "source_006_маркетинговый.docx",
+      "format": "docx",
+      "kind": "not_found",
+      "error_type": "not_found",
+      "subtype": "number",
+      "location": {
+        "kind": "paragraph",
+        "index": 12
+      },
+      "tampered_value": "605 единиц"
+    },
+    {
+      "doc": "check_007_производственная.pptx",
+      "source": "source_007_производственная.pptx",
+      "format": "pptx",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "number",
+      "location": {
+        "kind": "slide",
+        "index": 4
+      },
+      "tampered_value": "1169 единиц"
+    },
+    {
+      "doc": "check_007_производственная.pptx",
+      "source": "source_007_производственная.pptx",
+      "format": "pptx",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "money",
+      "location": {
+        "kind": "slide",
+        "index": 5
+      },
+      "tampered_value": "539 тысяч рублей"
+    },
+    {
+      "doc": "check_007_производственная.pptx",
+      "source": "source_007_производственная.pptx",
+      "format": "pptx",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "fact",
+      "location": {
+        "kind": "slide",
+        "index": 6
+      },
+      "tampered_value": "отклонено"
+    },
+    {
+      "doc": "check_007_производственная.pptx",
+      "source": "source_007_производственная.pptx",
+      "format": "pptx",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "name",
+      "location": {
+        "kind": "slide",
+        "index": 7
+      },
+      "tampered_value": "Наталья Гусева"
+    },
+    {
+      "doc": "check_007_производственная.pptx",
+      "source": "source_007_производственная.pptx",
+      "format": "pptx",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "money",
+      "location": {
+        "kind": "slide",
+        "index": 9
+      },
+      "tampered_value": "965 тысяч рублей"
+    },
+    {
+      "doc": "check_007_производственная.pptx",
+      "source": "source_007_производственная.pptx",
+      "format": "pptx",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "money",
+      "location": {
+        "kind": "slide",
+        "index": 11
+      },
+      "tampered_value": "700 тысяч рублей"
+    },
+    {
+      "doc": "check_007_производственная.pptx",
+      "source": "source_007_производственная.pptx",
+      "format": "pptx",
+      "kind": "not_found",
+      "error_type": "not_found",
+      "subtype": "number",
+      "location": {
+        "kind": "slide",
+        "index": 12
+      },
+      "tampered_value": "911 единиц"
+    },
+    {
+      "doc": "check_008_финансовый.pdf",
+      "source": "source_008_финансовый.pdf",
+      "format": "pdf",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "percent",
+      "location": {
+        "kind": "page",
+        "index": 4
+      },
+      "tampered_value": "23 процентов"
+    },
+    {
+      "doc": "check_008_финансовый.pdf",
+      "source": "source_008_финансовый.pdf",
+      "format": "pdf",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "percent",
+      "location": {
+        "kind": "page",
+        "index": 5
+      },
+      "tampered_value": "59 процентов"
+    },
+    {
+      "doc": "check_008_финансовый.pdf",
+      "source": "source_008_финансовый.pdf",
+      "format": "pdf",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "fact",
+      "location": {
+        "kind": "page",
+        "index": 6
+      },
+      "tampered_value": "отклонено"
+    },
+    {
+      "doc": "check_008_финансовый.pdf",
+      "source": "source_008_финансовый.pdf",
+      "format": "pdf",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "fact",
+      "location": {
+        "kind": "page",
+        "index": 7
+      },
+      "tampered_value": "отклонено"
+    },
+    {
+      "doc": "check_008_финансовый.pdf",
+      "source": "source_008_финансовый.pdf",
+      "format": "pdf",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "money",
+      "location": {
+        "kind": "page",
+        "index": 9
+      },
+      "tampered_value": "1102 тысяч рублей"
+    },
+    {
+      "doc": "check_008_финансовый.pdf",
+      "source": "source_008_финансовый.pdf",
+      "format": "pdf",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "money",
+      "location": {
+        "kind": "page",
+        "index": 11
+      },
+      "tampered_value": "462 тысяч рублей"
+    },
+    {
+      "doc": "check_008_финансовый.pdf",
+      "source": "source_008_финансовый.pdf",
+      "format": "pdf",
+      "kind": "not_found",
+      "error_type": "not_found",
+      "subtype": "number",
+      "location": {
+        "kind": "page",
+        "index": 12
+      },
+      "tampered_value": "556 единиц"
+    },
+    {
+      "doc": "check_009_план.docx",
+      "source": "source_009_план.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "number",
+      "location": {
+        "kind": "paragraph",
+        "index": 4
+      },
+      "tampered_value": "634 единиц"
+    },
+    {
+      "doc": "check_009_план.docx",
+      "source": "source_009_план.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "money",
+      "location": {
+        "kind": "paragraph",
+        "index": 5
+      },
+      "tampered_value": "539 тысяч рублей"
+    },
+    {
+      "doc": "check_009_план.docx",
+      "source": "source_009_план.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "fact",
+      "location": {
+        "kind": "paragraph",
+        "index": 6
+      },
+      "tampered_value": "отклонено"
+    },
+    {
+      "doc": "check_009_план.docx",
+      "source": "source_009_план.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "fact",
+      "location": {
+        "kind": "paragraph",
+        "index": 7
+      },
+      "tampered_value": "отклонено"
+    },
+    {
+      "doc": "check_009_план.docx",
+      "source": "source_009_план.docx",
+      "format": "docx",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "number",
+      "location": {
+        "kind": "paragraph",
+        "index": 9
+      },
+      "tampered_value": "602 единиц"
+    },
+    {
+      "doc": "check_009_план.docx",
+      "source": "source_009_план.docx",
+      "format": "docx",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "money",
+      "location": {
+        "kind": "paragraph",
+        "index": 11
+      },
+      "tampered_value": "1271 тысяч рублей"
+    },
+    {
+      "doc": "check_009_план.docx",
+      "source": "source_009_план.docx",
+      "format": "docx",
+      "kind": "not_found",
+      "error_type": "not_found",
+      "subtype": "number",
+      "location": {
+        "kind": "paragraph",
+        "index": 12
+      },
+      "tampered_value": "758 единиц"
+    },
+    {
+      "doc": "check_010_кадровая.pptx",
+      "source": "source_010_кадровая.pptx",
+      "format": "pptx",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "date",
+      "location": {
+        "kind": "slide",
+        "index": 4
+      },
+      "tampered_value": "22 июля 2025 года"
+    },
+    {
+      "doc": "check_010_кадровая.pptx",
+      "source": "source_010_кадровая.pptx",
+      "format": "pptx",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "money",
+      "location": {
+        "kind": "slide",
+        "index": 5
+      },
+      "tampered_value": "315 тысяч рублей"
+    },
+    {
+      "doc": "check_010_кадровая.pptx",
+      "source": "source_010_кадровая.pptx",
+      "format": "pptx",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "name",
+      "location": {
+        "kind": "slide",
+        "index": 6
+      },
+      "tampered_value": "Сергей Поляков"
+    },
+    {
+      "doc": "check_010_кадровая.pptx",
+      "source": "source_010_кадровая.pptx",
+      "format": "pptx",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "fact",
+      "location": {
+        "kind": "slide",
+        "index": 7
+      },
+      "tampered_value": "отклонено"
+    },
+    {
+      "doc": "check_010_кадровая.pptx",
+      "source": "source_010_кадровая.pptx",
+      "format": "pptx",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "money",
+      "location": {
+        "kind": "slide",
+        "index": 9
+      },
+      "tampered_value": "583 тысяч рублей"
+    },
+    {
+      "doc": "check_010_кадровая.pptx",
+      "source": "source_010_кадровая.pptx",
+      "format": "pptx",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "money",
+      "location": {
+        "kind": "slide",
+        "index": 11
+      },
+      "tampered_value": "971 тысяч рублей"
+    },
+    {
+      "doc": "check_010_кадровая.pptx",
+      "source": "source_010_кадровая.pptx",
+      "format": "pptx",
+      "kind": "not_found",
+      "error_type": "not_found",
+      "subtype": "number",
+      "location": {
+        "kind": "slide",
+        "index": 12
+      },
+      "tampered_value": "255 единиц"
+    },
+    {
+      "doc": "check_011_смета.pdf",
+      "source": "source_011_смета.pdf",
+      "format": "pdf",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "number",
+      "location": {
+        "kind": "page",
+        "index": 4
+      },
+      "tampered_value": "814 единиц"
+    },
+    {
+      "doc": "check_011_смета.pdf",
+      "source": "source_011_смета.pdf",
+      "format": "pdf",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "money",
+      "location": {
+        "kind": "page",
+        "index": 5
+      },
+      "tampered_value": "449 тысяч рублей"
+    },
+    {
+      "doc": "check_011_смета.pdf",
+      "source": "source_011_смета.pdf",
+      "format": "pdf",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "name",
+      "location": {
+        "kind": "page",
+        "index": 6
+      },
+      "tampered_value": "Виктор Лапин"
+    },
+    {
+      "doc": "check_011_смета.pdf",
+      "source": "source_011_смета.pdf",
+      "format": "pdf",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "name",
+      "location": {
+        "kind": "page",
+        "index": 7
+      },
+      "tampered_value": "Сергей Поляков"
+    },
+    {
+      "doc": "check_011_смета.pdf",
+      "source": "source_011_смета.pdf",
+      "format": "pdf",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "money",
+      "location": {
+        "kind": "page",
+        "index": 9
+      },
+      "tampered_value": "876 тысяч рублей"
+    },
+    {
+      "doc": "check_011_смета.pdf",
+      "source": "source_011_смета.pdf",
+      "format": "pdf",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "number",
+      "location": {
+        "kind": "page",
+        "index": 11
+      },
+      "tampered_value": "809 единиц"
+    },
+    {
+      "doc": "check_011_смета.pdf",
+      "source": "source_011_смета.pdf",
+      "format": "pdf",
+      "kind": "not_found",
+      "error_type": "not_found",
+      "subtype": "number",
+      "location": {
+        "kind": "page",
+        "index": 12
+      },
+      "tampered_value": "203 единиц"
+    },
+    {
+      "doc": "check_012_логистический.docx",
+      "source": "source_012_логистический.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "date",
+      "location": {
+        "kind": "paragraph",
+        "index": 4
+      },
+      "tampered_value": "11 февраля 2025 года"
+    },
+    {
+      "doc": "check_012_логистический.docx",
+      "source": "source_012_логистический.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "date",
+      "location": {
+        "kind": "paragraph",
+        "index": 5
+      },
+      "tampered_value": "1 октября 2025 года"
+    },
+    {
+      "doc": "check_012_логистический.docx",
+      "source": "source_012_логистический.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "name",
+      "location": {
+        "kind": "paragraph",
+        "index": 6
+      },
+      "tampered_value": "Юлия Седова"
+    },
+    {
+      "doc": "check_012_логистический.docx",
+      "source": "source_012_логистический.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "name",
+      "location": {
+        "kind": "paragraph",
+        "index": 7
+      },
+      "tampered_value": "Юлия Седова"
+    },
+    {
+      "doc": "check_012_логистический.docx",
+      "source": "source_012_логистический.docx",
+      "format": "docx",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "number",
+      "location": {
+        "kind": "paragraph",
+        "index": 9
+      },
+      "tampered_value": "840 единиц"
+    },
+    {
+      "doc": "check_012_логистический.docx",
+      "source": "source_012_логистический.docx",
+      "format": "docx",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "number",
+      "location": {
+        "kind": "paragraph",
+        "index": 11
+      },
+      "tampered_value": "757 единиц"
+    },
+    {
+      "doc": "check_012_логистический.docx",
+      "source": "source_012_логистический.docx",
+      "format": "docx",
+      "kind": "not_found",
+      "error_type": "not_found",
+      "subtype": "number",
+      "location": {
+        "kind": "paragraph",
+        "index": 12
+      },
+      "tampered_value": "353 единиц"
+    },
+    {
+      "doc": "check_013_отчёт.pptx",
+      "source": "source_013_отчёт.pptx",
+      "format": "pptx",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "date",
+      "location": {
+        "kind": "slide",
+        "index": 4
+      },
+      "tampered_value": "5 марта 2025 года"
+    },
+    {
+      "doc": "check_013_отчёт.pptx",
+      "source": "source_013_отчёт.pptx",
+      "format": "pptx",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "percent",
+      "location": {
+        "kind": "slide",
+        "index": 5
+      },
+      "tampered_value": "26 процентов"
+    },
+    {
+      "doc": "check_013_отчёт.pptx",
+      "source": "source_013_отчёт.pptx",
+      "format": "pptx",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "name",
+      "location": {
+        "kind": "slide",
+        "index": 6
+      },
+      "tampered_value": "Юлия Седова"
+    },
+    {
+      "doc": "check_013_отчёт.pptx",
+      "source": "source_013_отчёт.pptx",
+      "format": "pptx",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "name",
+      "location": {
+        "kind": "slide",
+        "index": 7
+      },
+      "tampered_value": "Наталья Гусева"
+    },
+    {
+      "doc": "check_013_отчёт.pptx",
+      "source": "source_013_отчёт.pptx",
+      "format": "pptx",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "money",
+      "location": {
+        "kind": "slide",
+        "index": 9
+      },
+      "tampered_value": "871 тысяч рублей"
+    },
+    {
+      "doc": "check_013_отчёт.pptx",
+      "source": "source_013_отчёт.pptx",
+      "format": "pptx",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "money",
+      "location": {
+        "kind": "slide",
+        "index": 11
+      },
+      "tampered_value": "663 тысяч рублей"
+    },
+    {
+      "doc": "check_013_отчёт.pptx",
+      "source": "source_013_отчёт.pptx",
+      "format": "pptx",
+      "kind": "not_found",
+      "error_type": "not_found",
+      "subtype": "number",
+      "location": {
+        "kind": "slide",
+        "index": 12
+      },
+      "tampered_value": "957 единиц"
+    },
+    {
+      "doc": "check_014_маркетинговый.pdf",
+      "source": "source_014_маркетинговый.pdf",
+      "format": "pdf",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "number",
+      "location": {
+        "kind": "page",
+        "index": 4
+      },
+      "tampered_value": "1175 единиц"
+    },
+    {
+      "doc": "check_014_маркетинговый.pdf",
+      "source": "source_014_маркетинговый.pdf",
+      "format": "pdf",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "percent",
+      "location": {
+        "kind": "page",
+        "index": 5
+      },
+      "tampered_value": "48 процентов"
+    },
+    {
+      "doc": "check_014_маркетинговый.pdf",
+      "source": "source_014_маркетинговый.pdf",
+      "format": "pdf",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "fact",
+      "location": {
+        "kind": "page",
+        "index": 6
+      },
+      "tampered_value": "отклонено"
+    },
+    {
+      "doc": "check_014_маркетинговый.pdf",
+      "source": "source_014_маркетинговый.pdf",
+      "format": "pdf",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "name",
+      "location": {
+        "kind": "page",
+        "index": 7
+      },
+      "tampered_value": "Ольга Белова"
+    },
+    {
+      "doc": "check_014_маркетинговый.pdf",
+      "source": "source_014_маркетинговый.pdf",
+      "format": "pdf",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "number",
+      "location": {
+        "kind": "page",
+        "index": 9
+      },
+      "tampered_value": "412 единиц"
+    },
+    {
+      "doc": "check_014_маркетинговый.pdf",
+      "source": "source_014_маркетинговый.pdf",
+      "format": "pdf",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "number",
+      "location": {
+        "kind": "page",
+        "index": 11
+      },
+      "tampered_value": "695 единиц"
+    },
+    {
+      "doc": "check_014_маркетинговый.pdf",
+      "source": "source_014_маркетинговый.pdf",
+      "format": "pdf",
+      "kind": "not_found",
+      "error_type": "not_found",
+      "subtype": "number",
+      "location": {
+        "kind": "page",
+        "index": 12
+      },
+      "tampered_value": "620 единиц"
+    },
+    {
+      "doc": "check_015_производственная.docx",
+      "source": "source_015_производственная.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "number",
+      "location": {
+        "kind": "paragraph",
+        "index": 4
+      },
+      "tampered_value": "932 единиц"
+    },
+    {
+      "doc": "check_015_производственная.docx",
+      "source": "source_015_производственная.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "numeric",
+      "subtype": "money",
+      "location": {
+        "kind": "paragraph",
+        "index": 5
+      },
+      "tampered_value": "563 тысяч рублей"
+    },
+    {
+      "doc": "check_015_производственная.docx",
+      "source": "source_015_производственная.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "fact",
+      "location": {
+        "kind": "paragraph",
+        "index": 6
+      },
+      "tampered_value": "отклонено"
+    },
+    {
+      "doc": "check_015_производственная.docx",
+      "source": "source_015_производственная.docx",
+      "format": "docx",
+      "kind": "contradicted",
+      "error_type": "claim",
+      "subtype": "name",
+      "location": {
+        "kind": "paragraph",
+        "index": 7
+      },
+      "tampered_value": "Ольга Белова"
+    },
+    {
+      "doc": "check_015_производственная.docx",
+      "source": "source_015_производственная.docx",
+      "format": "docx",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "number",
+      "location": {
+        "kind": "paragraph",
+        "index": 9
+      },
+      "tampered_value": "715 единиц"
+    },
+    {
+      "doc": "check_015_производственная.docx",
+      "source": "source_015_производственная.docx",
+      "format": "docx",
+      "kind": "internal_conflict",
+      "error_type": "internal",
+      "subtype": "money",
+      "location": {
+        "kind": "paragraph",
+        "index": 11
+      },
+      "tampered_value": "518 тысяч рублей"
+    },
+    {
+      "doc": "check_015_производственная.docx",
+      "source": "source_015_производственная.docx",
+      "format": "docx",
+      "kind": "not_found",
+      "error_type": "not_found",
+      "subtype": "number",
+      "location": {
+        "kind": "paragraph",
+        "index": 12
+      },
+      "tampered_value": "640 единиц"
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+doc,format,error_type,subtype,gt_kind,location_index,tampered_value,outcome,finding_verdict,match_reason
+check_003_смета.docx,docx,numeric,percent,contradicted,4,29 процентов,TP,contradicted,index
+check_003_смета.docx,docx,numeric,money,contradicted,5,489 тысяч рублей,TP,contradicted,index
+check_003_смета.docx,docx,claim,fact,contradicted,6,отклонено,FN,,
+check_003_смета.docx,docx,claim,name,contradicted,7,Наталья Гусева,TP,contradicted,index
+check_003_смета.docx,docx,internal,number,internal_conflict,9,1099 единиц,TP,contradicted,index
+check_003_смета.docx,docx,internal,money,internal_conflict,11,1080 тысяч рублей,TP,contradicted,index
+check_003_смета.docx,docx,not_found,number,not_found,12,608 единиц,NF_OK,,
+check_004_логистический.pptx,pptx,numeric,number,contradicted,4,446 единиц,TP,contradicted,index
+check_004_логистический.pptx,pptx,numeric,percent,contradicted,5,47 процентов,TP,contradicted,index
+check_004_логистический.pptx,pptx,claim,name,contradicted,6,Сергей Поляков,FN,,
+check_004_логистический.pptx,pptx,claim,name,contradicted,7,Юлия Седова,TP,contradicted,index
+check_004_логистический.pptx,pptx,internal,money,internal_conflict,9,382 тысяч рублей,TP,contradicted,index
+check_004_логистический.pptx,pptx,internal,money,internal_conflict,11,343 тысяч рублей,TP,contradicted,index
+check_004_логистический.pptx,pptx,not_found,number,not_found,12,714 единиц,NF_OK,,
+check_005_отчёт.pdf,pdf,numeric,number,contradicted,4,994 единиц,TP,contradicted,index
+check_005_отчёт.pdf,pdf,numeric,number,contradicted,5,463 единиц,TP,contradicted,index
+check_005_отчёт.pdf,pdf,claim,fact,contradicted,6,отклонено,FN,,
+check_005_отчёт.pdf,pdf,claim,fact,contradicted,7,отклонено,FN,,
+check_005_отчёт.pdf,pdf,internal,number,internal_conflict,9,1154 единиц,TP,contradicted,index
+check_005_отчёт.pdf,pdf,internal,number,internal_conflict,11,977 единиц,TP,contradicted,index
+check_005_отчёт.pdf,pdf,not_found,number,not_found,12,819 единиц,NF_OK,,
+check_006_маркетинговый.docx,docx,numeric,percent,contradicted,4,50 процентов,TP,contradicted,index
+check_006_маркетинговый.docx,docx,numeric,number,contradicted,5,1133 единиц,TP,contradicted,index
+check_006_маркетинговый.docx,docx,claim,fact,contradicted,6,отклонено,TP,contradicted,index
+check_006_маркетинговый.docx,docx,claim,fact,contradicted,7,отклонено,FN,,
+check_006_маркетинговый.docx,docx,internal,number,internal_conflict,9,750 единиц,TP,contradicted,index
+check_006_маркетинговый.docx,docx,internal,number,internal_conflict,11,461 единиц,TP,contradicted,index
+check_006_маркетинговый.docx,docx,not_found,number,not_found,12,605 единиц,NF_OK,,
+check_007_производственная.pptx,pptx,numeric,number,contradicted,4,1169 единиц,TP,contradicted,index
+check_007_производственная.pptx,pptx,numeric,money,contradicted,5,539 тысяч рублей,TP,contradicted,index
+check_007_производственная.pptx,pptx,claim,fact,contradicted,6,отклонено,TP,contradicted,index
+check_007_производственная.pptx,pptx,claim,name,contradicted,7,Наталья Гусева,TP,contradicted,index
+check_007_производственная.pptx,pptx,internal,money,internal_conflict,9,965 тысяч рублей,TP,contradicted,index
+check_007_производственная.pptx,pptx,internal,money,internal_conflict,11,700 тысяч рублей,TP,contradicted,index
+check_007_производственная.pptx,pptx,not_found,number,not_found,12,911 единиц,NF_OK,,
+check_008_финансовый.pdf,pdf,numeric,percent,contradicted,4,23 процентов,TP,contradicted,index
+check_008_финансовый.pdf,pdf,numeric,percent,contradicted,5,59 процентов,TP,contradicted,index
+check_008_финансовый.pdf,pdf,claim,fact,contradicted,6,отклонено,TP,contradicted,value
+check_008_финансовый.pdf,pdf,claim,fact,contradicted,7,отклонено,TP,contradicted,index
+check_008_финансовый.pdf,pdf,internal,money,internal_conflict,9,1102 тысяч рублей,TP,contradicted,index
+check_008_финансовый.pdf,pdf,internal,money,internal_conflict,11,462 тысяч рублей,FN,,
+check_008_финансовый.pdf,pdf,not_found,number,not_found,12,556 единиц,NF_OK,,
+check_009_план.docx,docx,numeric,number,contradicted,4,634 единиц,TP,contradicted,index
+check_009_план.docx,docx,numeric,money,contradicted,5,539 тысяч рублей,TP,contradicted,index
+check_009_план.docx,docx,claim,fact,contradicted,6,отклонено,TP,contradicted,index
+check_009_план.docx,docx,claim,fact,contradicted,7,отклонено,FN,,
+check_009_план.docx,docx,internal,number,internal_conflict,9,602 единиц,TP,contradicted,index
+check_009_план.docx,docx,internal,money,internal_conflict,11,1271 тысяч рублей,TP,contradicted,index
+check_009_план.docx,docx,not_found,number,not_found,12,758 единиц,NF_OK,,
+check_010_кадровая.pptx,pptx,numeric,date,contradicted,4,22 июля 2025 года,TP,contradicted,index
+check_010_кадровая.pptx,pptx,numeric,money,contradicted,5,315 тысяч рублей,TP,contradicted,index
+check_010_кадровая.pptx,pptx,claim,name,contradicted,6,Сергей Поляков,TP,contradicted,index
+check_010_кадровая.pptx,pptx,claim,fact,contradicted,7,отклонено,FN,,
+check_010_кадровая.pptx,pptx,internal,money,internal_conflict,9,583 тысяч рублей,TP,contradicted,index
+check_010_кадровая.pptx,pptx,internal,money,internal_conflict,11,971 тысяч рублей,TP,contradicted,index
+check_010_кадровая.pptx,pptx,not_found,number,not_found,12,255 единиц,NF_OK,,
+check_011_смета.pdf,pdf,numeric,number,contradicted,4,814 единиц,TP,contradicted,index
+check_011_смета.pdf,pdf,numeric,money,contradicted,5,449 тысяч рублей,TP,contradicted,index
+check_011_смета.pdf,pdf,claim,name,contradicted,6,Виктор Лапин,FN,,
+check_011_смета.pdf,pdf,claim,name,contradicted,7,Сергей Поляков,TP,contradicted,index
+check_011_смета.pdf,pdf,internal,money,internal_conflict,9,876 тысяч рублей,TP,contradicted,index
+check_011_смета.pdf,pdf,internal,number,internal_conflict,11,809 единиц,TP,contradicted,index
+check_011_смета.pdf,pdf,not_found,number,not_found,12,203 единиц,NF_OK,,
+check_012_логистический.docx,docx,numeric,date,contradicted,4,11 февраля 2025 года,TP,contradicted,index
+check_012_логистический.docx,docx,numeric,date,contradicted,5,1 октября 2025 года,TP,contradicted,index
+check_012_логистический.docx,docx,claim,name,contradicted,6,Юлия Седова,TP,contradicted,index
+check_012_логистический.docx,docx,claim,name,contradicted,7,Юлия Седова,FN,,
+check_012_логистический.docx,docx,internal,number,internal_conflict,9,840 единиц,TP,contradicted,index
+check_012_логистический.docx,docx,internal,number,internal_conflict,11,757 единиц,TP,contradicted,index
+check_012_логистический.docx,docx,not_found,number,not_found,12,353 единиц,NF_OK,,
+check_013_отчёт.pptx,pptx,numeric,date,contradicted,4,5 марта 2025 года,TP,contradicted,index
+check_013_отчёт.pptx,pptx,numeric,percent,contradicted,5,26 процентов,TP,contradicted,index
+check_013_отчёт.pptx,pptx,claim,name,contradicted,6,Юлия Седова,TP,contradicted,index
+check_013_отчёт.pptx,pptx,claim,name,contradicted,7,Наталья Гусева,TP,contradicted,index
+check_013_отчёт.pptx,pptx,internal,money,internal_conflict,9,871 тысяч рублей,TP,contradicted,index
+check_013_отчёт.pptx,pptx,internal,money,internal_conflict,11,663 тысяч рублей,TP,contradicted,index
+check_013_отчёт.pptx,pptx,not_found,number,not_found,12,957 единиц,NF_OK,,
+check_014_маркетинговый.pdf,pdf,numeric,number,contradicted,4,1175 единиц,TP,contradicted,index
+check_014_маркетинговый.pdf,pdf,numeric,percent,contradicted,5,48 процентов,TP,contradicted,index
+check_014_маркетинговый.pdf,pdf,claim,fact,contradicted,6,отклонено,TP,contradicted,index
+check_014_маркетинговый.pdf,pdf,claim,name,contradicted,7,Ольга Белова,TP,contradicted,index
+check_014_маркетинговый.pdf,pdf,internal,number,internal_conflict,9,412 единиц,TP,contradicted,index
+check_014_маркетинговый.pdf,pdf,internal,number,internal_conflict,11,695 единиц,TP,contradicted,index
+check_014_маркетинговый.pdf,pdf,not_found,number,not_found,12,620 единиц,NF_OK,,
+check_015_производственная.docx,docx,numeric,number,contradicted,4,932 единиц,TP,contradicted,index
+check_015_производственная.docx,docx,numeric,money,contradicted,5,563 тысяч рублей,TP,contradicted,index
+check_015_производственная.docx,docx,claim,fact,contradicted,6,отклонено,TP,contradicted,index
+check_015_производственная.docx,docx,claim,name,contradicted,7,Ольга Белова,TP,contradicted,index
+check_015_производственная.docx,docx,internal,number,internal_conflict,9,715 единиц,TP,contradicted,index
+check_015_производственная.docx,docx,internal,money,internal_conflict,11,518 тысяч рублей,TP,internal_conflict,index
+check_015_производственная.docx,docx,not_found,number,not_found,12,640 единиц,NF_OK,,

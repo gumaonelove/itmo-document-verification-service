@@ -23,8 +23,11 @@ class Settings(BaseSettings):
     )
 
     # --- LLM: OpenAI-совместимый HTTP-эндпойнт (раннер — деталь окружения) ---
-    llm_base_url: str = "http://localhost:8080/v1"
-    llm_model: str = "Qwen3.6-35B-A3B"
+    # Система МОДЕЛЬ-АГНОСТИЧНА: меняется одной переменной LLM_MODEL/LLM_BASE_URL.
+    # Дефолт — qwen3-coder:30b (лучший результат на корпусе оценки: recall/precision/F1 = 1.0);
+    # альтернатива — лёгкая русско-специализированная T-lite-it-2.1 (см. MODEL_COMPARISON.md).
+    llm_base_url: str = "http://localhost:11434/v1"
+    llm_model: str = "qwen3-coder:30b"
     # Локальные серверы ключ игнорируют, но openai SDK требует непустое значение.
     llm_api_key: str = "not-needed"
     llm_temperature: float = 0.0
@@ -35,10 +38,12 @@ class Settings(BaseSettings):
     llm_concurrency: int = 4
 
     # --- Эмбеддинги ---
-    # Бэкенд: "sentence-transformers" (локальная модель на MPS) или
-    # "ollama" (OpenAI-совместимый /v1/embeddings, напр. qwen3-embedding:8b).
-    embed_backend: str = "sentence-transformers"
-    embed_model: str = "Qwen/Qwen3-Embedding-8B"
+    # Бэкенд: "ollama" (OpenAI-совместимый /v1/embeddings, дефолт — модель уже
+    # есть в Ollama) или "sentence-transformers" (локальная модель Qwen3-Embedding
+    # на MPS, EMBED_MODEL=Qwen/Qwen3-Embedding-8B). В обоих случаях это одна и та
+    # же модель Qwen3-Embedding-8B (dim 4096).
+    embed_backend: str = "ollama"
+    embed_model: str = "qwen3-embedding:8b"
     embed_dim: int = 4096
     embed_device: str = "mps"
     # Эндпойнт для embed_backend="ollama".

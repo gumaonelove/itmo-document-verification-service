@@ -1,159 +1,364 @@
-"""Генерация датасета для оценки ВериДок.
+"""Генератор синтетического корпуса для оценки ВериДок (параметризованный).
 
-Создаёт 3–5 ПАР документов: «источник» (правильные факты) и «проверяемый»
-(с внесёнными ошибками), а также общий ground_truth.json — список ожидаемых
-находок. Покрываются все четыре типа внесений:
+Создаёт N пар документов «источник» (корректные факты) и «проверяемый»
+(с внесёнными ошибками) во всех трёх форматах (DOCX/PPTX/PDF) и общий
+машиночитаемый манифест ``ground_truth.json``.
 
-  (1) изменение числа;
-  (2) замена даты;
-  (3) утверждение, противоречащее источнику;
-  (4) внутреннее расхождение (одно число названо по-разному в двух местах
-      одного проверяемого документа).
+Типы внесений (error_type) и подтипы (subtype):
+  - numeric  : изменено значение факта  -> ожидаемый вердикт contradicted;
+               подтипы number / date / percent / money;
+  - claim    : подменён факт/имя/организация -> contradicted;
+               подтипы fact / name / org;
+  - internal : одна величина названа по-разному в двух местах проверяемого
+               документа -> internal_conflict; подтипы number / date;
+  - not_found: в проверяемом есть утверждение, которого НЕТ в источнике ->
+               ожидаемый вердикт not_found (диагностика «не выдумывает
+               contradicted»).
+Плюс ЧИСТЫЕ документы (без ошибок): любой не-supported вердикт на них — ложное
+срабатывание (FP).
 
-И все три формата: DOCX (python-docx), PPTX (python-pptx), PDF (pymupdf).
+Раскладка для однозначной локации: ОДИН факт = один абзац (DOCX) / слайд (PPTX) /
+страница (PDF). Тогда parser выставит location.index = позиция факта (1-based),
+и сопоставление с ground truth детерминировано.
 
-Генерация ДЕТЕРМИНИРОВАНА: тексты заданы литералами, порядок фиксирован,
-случайности нет. Индексы location в ground_truth согласованы с парсером
-veridoc.parsing (1-based; для DOCX счётчик абзацев сквозной и включает пустые
-абзацы, поэтому индексы вычисляются по позиции в плоском списке абзацев).
+Детерминизм: всё значения берутся из ``random.Random(seed + doc_index)``; повтор с
+тем же ``--seed`` даёт побайтово тот же манифест.
 
 Запуск:
-    python -m eval.seed
-    # или
-    python eval/seed.py
+    python eval/seed.py --docs 16 --numeric 2 --claim 2 --internal 2
+    python eval/seed.py --docs 16 --numeric 2 --claim 2 --internal 2 \
+        --notfound 1 --clean 3 --seed 42
 """
 
+import argparse
 import json
 import logging
 import os
+import random
 import time
 
 logger = logging.getLogger(__name__)
 
-# Каталог с результатами — рядом с этим файлом, в datasets/.
 DATASETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "datasets")
 GROUND_TRUTH_PATH = os.path.join(DATASETS_DIR, "ground_truth.json")
 
+_FORMATS = ("docx", "pptx", "pdf")
 
-# ---------------------------------------------------------------------------
-# DOCX
-# ---------------------------------------------------------------------------
+# --- Словари (детерминированно выбираются по seed) -------------------------
+_THEMES = [
+    ("Финансовый отчёт", "финансовый департамент"),
+    ("План проекта", "проектный офис"),
+    ("Кадровая записка", "отдел кадров"),
+    ("Смета договора", "договорный отдел"),
+    ("Логистический отчёт", "служба логистики"),
+    ("Отчёт о закупках", "отдел закупок"),
+    ("Маркетинговый план", "отдел маркетинга"),
+    ("Производственная сводка", "производственный отдел"),
+]
+_ORGS = ["Орбита", "Маяк", "Вектор", "Контур", "Гранит", "Зенит", "Альфа", "Дельта"]
+_ALT_ORGS = ["Сатурн", "Полюс", "Эверест", "Атлант", "Меридиан", "Каскад"]
+_NAMES = ["Игорь Смирнов", "Анна Воробьёва", "Павел Кузнецов", "Мария Лебедева",
+          "Олег Соколов", "Елена Морозова", "Дмитрий Орлов", "Светлана Громова"]
+_ALT_NAMES = ["Андрей Зайцев", "Ольга Белова", "Сергей Поляков", "Наталья Гусева",
+              "Виктор Лапин", "Юлия Седова"]
+_MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля",
+           "августа", "сентября", "октября", "ноября", "декабря"]
+_LABELS = ["выручка", "чистая прибыль", "операционные расходы", "объём инвестиций",
+           "фонд оплаты труда", "затраты на материалы", "дебиторская задолженность"]
+_EVENTS = ["старт проекта", "ввод в эксплуатацию", "приёмка работ",
+           "поставка оборудования", "завершение этапа"]
+_ITEMS = ["оборудование", "монтажные работы", "лицензии", "доставка", "пусконаладка"]
+# Роли для claim/name — фразы «<роль> назначен <имя>» (T-lite надёжно извлекает
+# именно такую конструкцию назначения человека).
+_ROLES = ["Руководителем проекта", "Главным бухгалтером", "Ведущим аналитиком",
+          "Ответственным за приёмку", "Начальником отдела закупок",
+          "Куратором поставки", "Главным инженером", "Старшим экономистом",
+          "Менеджером проекта", "Ответственным исполнителем"]
+# Задачи для claim/fact — фразы «Статус <задачи>: <статус>».
+_TASKS = ["согласования сметы", "приёмки партии", "аудита расходов",
+          "поверки приборов", "проверки документации", "ввода данных в систему"]
 
-def _write_docx(path: str, paragraphs: list[str]) -> None:
-    """Записать DOCX: по одному абзацу на элемент списка (порядок сохранён).
 
-    Парсер veridoc.parsing нумерует абзацы сквозным 1-based счётчиком, считая
-    и пустые абзацы. Поэтому индекс location для абзаца с текстом paragraphs[i]
-    равен i + 1 (учитывая, что в новом документе python-docx нет «нулевого»
-    лишнего абзаца — каждый add_paragraph создаёт ровно один параграф)."""
+# --- Построение фактов ------------------------------------------------------
+# Каждый факт: dict с text (предложение), subtype, и subject (ключ для пары
+# источник/проверяемый). value_fragment — подстрока с проверяемым значением.
+
+def _fact_number(rng, label, value):
+    return {"subtype": "number", "subject": f"number:{label}",
+            "text": f"Показатель «{label}» за 2024 год составил {value} единиц.",
+            "value_fragment": f"{value} единиц"}
+
+
+def _fact_money(rng, item, value):
+    return {"subtype": "money", "subject": f"money:{item}",
+            "text": f"Стоимость по статье «{item}» составляет {value} тысяч рублей.",
+            "value_fragment": f"{value} тысяч рублей"}
+
+
+def _fact_percent(rng, label, value):
+    return {"subtype": "percent", "subject": f"percent:{label}",
+            "text": f"Рост показателя «{label}» составил {value} процентов.",
+            "value_fragment": f"{value} процентов"}
+
+
+def _fact_date(rng, event, day, month, year=2025):
+    return {"subtype": "date", "subject": f"date:{event}",
+            "text": f"Срок «{event}» назначен на {day} {month} {year} года.",
+            "value_fragment": f"{day} {month} {year} года"}
+
+
+def _fact_name(rng, role, name):
+    return {"subtype": "name", "subject": f"name:{role}",
+            "text": f"{role} назначен {name}.",
+            "value_fragment": name}
+
+
+def _fact_status(rng, task, status):
+    return {"subtype": "fact", "subject": f"fact:{task}",
+            "text": f"Статус {task}: {status}.",
+            "value_fragment": status}
+
+
+def _numeric_fact(rng, used_labels):
+    """Случайный numeric-факт (number/date/percent/money) с уникальным subject."""
+    kind = rng.choice(["number", "money", "percent", "date"])
+    if kind == "number":
+        label = _pick_unique(rng, _LABELS, used_labels)
+        return _fact_number(rng, label, rng.randint(120, 980))
+    if kind == "money":
+        item = _pick_unique(rng, _ITEMS, used_labels)
+        return _fact_money(rng, item, rng.randint(60, 940))
+    if kind == "percent":
+        label = _pick_unique(rng, _LABELS, used_labels)
+        return _fact_percent(rng, label, rng.randint(3, 48))
+    event = _pick_unique(rng, _EVENTS, used_labels)
+    return _fact_date(rng, event, rng.randint(1, 27), rng.choice(_MONTHS))
+
+
+def _claim_fact(rng, used_labels):
+    """Случайный claim-факт: имя (назначение человека) или статус задачи.
+
+    Подтип организации (org) намеренно не используется: текущая модель/промпт
+    не извлекает названия организаций как проверяемые утверждения — это
+    задокументированное ограничение (см. metrics.md / README §9).
+    """
+    if rng.random() < 0.5:
+        role = _pick_unique(rng, _ROLES, used_labels)
+        return _fact_name(rng, role, rng.choice(_NAMES))
+    task = _pick_unique(rng, _TASKS, used_labels)
+    return _fact_status(rng, task, "согласовано")
+
+
+def _pick_unique(rng, pool, used):
+    """Выбрать элемент пула, которого ещё не было (для уникальных subject)."""
+    options = [x for x in pool if x not in used]
+    if not options:
+        options = pool
+    choice = rng.choice(options)
+    used.add(choice)
+    return choice
+
+
+# --- Подмена значения (создание ошибки) ------------------------------------
+
+def _tamper(rng, fact):
+    """Вернуть (tampered_fact, tampered_value_fragment) — изменённую версию факта."""
+    st = fact["subtype"]
+    if st == "number":
+        v = int(fact["value_fragment"].split()[0])
+        nv = v + rng.randint(40, 300)
+        return _replace(fact, f"{v} единиц", f"{nv} единиц"), f"{nv} единиц"
+    if st == "money":
+        v = int(fact["value_fragment"].split()[0])
+        nv = v + rng.randint(50, 400)
+        return _replace(fact, f"{v} тысяч", f"{nv} тысяч"), f"{nv} тысяч рублей"
+    if st == "percent":
+        v = int(fact["value_fragment"].split()[0])
+        nv = v + rng.randint(5, 40)
+        return _replace(fact, f"{v} процентов", f"{nv} процентов"), f"{nv} процентов"
+    if st == "date":
+        # Сдвигаем месяц и день — значение точно отличается.
+        old = fact["value_fragment"]
+        parts = old.split()
+        new_month = _MONTHS[(_MONTHS.index(parts[1]) + 5) % 12]
+        new_day = (int(parts[0]) % 27) + 1
+        new_frag = f"{new_day} {new_month} {parts[2]} {parts[3]}"
+        return _replace(fact, old, new_frag), new_frag
+    if st == "name":
+        new = rng.choice(_ALT_NAMES)
+        return _replace(fact, fact["value_fragment"], new), new
+    if st == "org":
+        new = rng.choice(_ALT_ORGS)
+        old = fact["value_fragment"]
+        return _replace(fact, old, f"«{new}»"), f"«{new}»"
+    # fact/status — меняем на ЯВНО другой статус (а не на отрицание «не …»),
+    # чтобы тест не сводился к распознаванию частицы «не».
+    new = "отклонено"
+    return _replace(fact, fact["value_fragment"], new), new
+
+
+def _replace(fact, old_sub, new_sub):
+    f = dict(fact)
+    f["text"] = fact["text"].replace(old_sub, new_sub)
+    f["value_fragment"] = new_sub
+    return f
+
+
+# --- Генерация одной пары документов ---------------------------------------
+
+def _generate_pair(doc_index, fmt, counts, base_seed):
+    """Сгенерировать пару (источник, проверяемый) + список GT-ошибок.
+
+    counts: dict с numeric/claim/internal/notfound (число ошибок каждого типа)
+    и флагом clean. Возвращает (source_texts, check_texts, gt_errors, is_clean).
+    Один факт = одна единица (абзац/слайд/страница); индекс GT = позиция в check.
+    """
+    rng = random.Random(base_seed + doc_index * 1000 + ord(fmt[0]))
+    theme_title, dept = _THEMES[doc_index % len(_THEMES)]
+    used = set()
+
+    source_facts = []  # факты в источнике (корректные)
+    check_facts = []   # факты в проверяемом (часть подменена)
+    gt = []            # записи ground truth
+
+    def add_correct():
+        f = _numeric_fact(rng, used) if rng.random() < 0.6 else _claim_fact(rng, used)
+        source_facts.append(f)
+        check_facts.append(f)
+
+    # 1) Корректные факты (станут supported).
+    for _ in range(3):
+        add_correct()
+
+    if counts["clean"]:
+        # Чистый документ: только корректные факты, без ошибок.
+        for _ in range(2):
+            add_correct()
+        return _render(source_facts, check_facts, theme_title, dept, fmt), gt, True
+
+    # 2) numeric-ошибки.
+    for _ in range(counts["numeric"]):
+        f = _numeric_fact(rng, used)
+        source_facts.append(f)
+        tampered, frag = _tamper(rng, f)
+        check_facts.append(tampered)
+        gt.append(_gt_error("contradicted", "numeric", f["subtype"], frag,
+                            len(check_facts)))
+
+    # 3) claim-ошибки.
+    for _ in range(counts["claim"]):
+        f = _claim_fact(rng, used)
+        source_facts.append(f)
+        tampered, frag = _tamper(rng, f)
+        check_facts.append(tampered)
+        gt.append(_gt_error("contradicted", "claim", f["subtype"], frag,
+                            len(check_facts)))
+
+    # 4) internal-ошибки: одна величина названа по-разному в двух местах check.
+    for _ in range(counts["internal"]):
+        st_kind = rng.choice(["number", "money"])
+        if st_kind == "number":
+            label = _pick_unique(rng, _LABELS, used)
+            v = rng.randint(120, 980)
+            base = _fact_number(rng, label, v)
+            alt_v = v + rng.randint(40, 300)
+            alt = _replace(base, f"{v} единиц", f"{alt_v} единиц")
+            frag = f"{alt_v} единиц"
+        else:
+            item = _pick_unique(rng, _ITEMS, used)
+            v = rng.randint(60, 940)
+            base = _fact_money(rng, item, v)
+            alt_v = v + rng.randint(50, 400)
+            alt = _replace(base, f"{v} тысяч", f"{alt_v} тысяч")
+            frag = f"{alt_v} тысяч рублей"
+        source_facts.append(base)               # источник: одно согласованное значение
+        check_facts.append(base)                # в check — первое упоминание (верное)
+        check_facts.append(alt)                 # и второе, конфликтующее
+        gt.append(_gt_error("internal_conflict", "internal", base["subtype"], frag,
+                            len(check_facts)))   # локация = второе (изменённое) упоминание
+
+    # 5) not_found: факт, которого НЕТ в источнике.
+    for _ in range(counts["notfound"]):
+        label = _pick_unique(rng, _LABELS, used)
+        f = _fact_number(rng, "прочее: " + label, rng.randint(100, 999))
+        check_facts.append(f)  # только в check
+        gt.append(_gt_error("not_found", "not_found", "number", f["value_fragment"],
+                            len(check_facts)))
+
+    return _render(source_facts, check_facts, theme_title, dept, fmt), gt, False
+
+
+def _gt_error(kind, error_type, subtype, value_fragment, check_index):
+    return {
+        "kind": kind,
+        "error_type": error_type,
+        "subtype": subtype,
+        "tampered_value": value_fragment,
+        "location_index": check_index,  # 1-based позиция в check; kind заполнит _render
+    }
+
+
+def _render(source_facts, check_facts, title, dept, fmt):
+    """Сформировать тексты единиц для источника и проверяемого по формату."""
+    return {
+        "source": [f["text"] for f in source_facts],
+        "check": [f["text"] for f in check_facts],
+        "title": title,
+        "dept": dept,
+    }
+
+
+# --- Запись файлов ----------------------------------------------------------
+
+def _location_kind(fmt):
+    return {"docx": "paragraph", "pptx": "slide", "pdf": "page"}[fmt]
+
+
+def _write_docx(path, units, title, dept):
     from docx import Document
-
     doc = Document()
-    for text in paragraphs:
+    # Один факт = один абзац; индекс location = позиция (1-based).
+    for text in units:
         doc.add_paragraph(text)
     doc.save(path)
 
 
-def _docx_index(paragraphs: list[str], needle: str) -> int:
-    """1-based индекс первого абзаца, содержащего подстроку needle.
-
-    Совпадает с location.index, который выставит парсер для этого абзаца.
-    """
-    for i, text in enumerate(paragraphs, start=1):
-        if needle in text:
-            return i
-    raise ValueError(f"Подстрока не найдена в абзацах: {needle!r}")
-
-
-# ---------------------------------------------------------------------------
-# PPTX
-# ---------------------------------------------------------------------------
-
-def _write_pptx(path: str, slides: list[list[str]]) -> None:
-    """Записать PPTX: один слайд на элемент slides; элемент — список строк.
-
-    Первая строка слайда становится заголовком, остальные — телом (буллеты).
-    Слайды нумеруются 1-based, как в парсере (location.index = номер слайда).
-    """
+def _write_pptx(path, units, title, dept):
     from pptx import Presentation
     from pptx.util import Inches
-
     prs = Presentation()
-    blank = prs.slide_layouts[6]  # пустой макет, добавляем текст сами
-
-    for lines in slides:
+    blank = prs.slide_layouts[6]
+    # Один факт = один слайд; индекс location = номер слайда (1-based).
+    for i, text in enumerate(units, start=1):
         slide = prs.slides.add_slide(blank)
-        title_text = lines[0] if lines else ""
-        body_lines = lines[1:]
-
-        title_box = slide.shapes.add_textbox(
-            Inches(0.5), Inches(0.3), Inches(9.0), Inches(1.0)
-        )
-        title_box.text_frame.text = title_text
-
-        body_box = slide.shapes.add_textbox(
-            Inches(0.5), Inches(1.5), Inches(9.0), Inches(5.0)
-        )
-        tf = body_box.text_frame
-        for j, line in enumerate(body_lines):
-            para = tf.paragraphs[0] if j == 0 else tf.add_paragraph()
-            para.text = line
-
+        box = slide.shapes.add_textbox(Inches(0.5), Inches(1.0), Inches(9.0), Inches(4.0))
+        box.text_frame.text = text
     prs.save(path)
 
 
-# ---------------------------------------------------------------------------
-# PDF
-# ---------------------------------------------------------------------------
-
-def _write_pdf(path: str, pages: list[list[str]]) -> None:
-    """Записать PDF: один лист на элемент pages; элемент — список строк.
-
-    Текст вставляется построчно через page.insert_text. Используется встроенный
-    шрифт "china-ss": в отличие от "helv", он покрывает кириллицу и корректно
-    извлекается обратно (get_text), что важно для русского содержимого. Страницы
-    нумеруются 1-based (location.index = номер страницы), как в парсере PDF.
-    """
+def _write_pdf(path, units, title, dept):
     import pymupdf
-
-    fontsize = 11.0
-    left = 72.0
-    top = 72.0
-    line_step = 20.0
-
+    fontsize, left, top, step = 11.0, 72.0, 72.0, 20.0
     doc = pymupdf.open()
     try:
-        for lines in pages:
-            page = doc.new_page()  # стандартный A4 (ширина 595 пунктов)
-            # Шрифт china-ss моноширинный: один глиф = fontsize пунктов по
-            # горизонтали. insert_text не переносит и обрезает текст по краю
-            # листа, поэтому считаем лимит символов на строку и переносим сами.
-            usable = page.rect.width - left - 56.0  # запас справа
+        # Один факт = одна страница; индекс location = номер страницы (1-based).
+        for text in units:
+            page = doc.new_page()
+            usable = page.rect.width - left - 56.0
             max_chars = int(usable // fontsize)
             y = top
-            for line in lines:
-                for chunk in _wrap_line(line, max_chars):
-                    page.insert_text(
-                        (left, y), chunk, fontsize=fontsize, fontname="china-ss"
-                    )
-                    y += line_step
+            for chunk in _wrap_line(text, max_chars):
+                page.insert_text((left, y), chunk, fontsize=fontsize, fontname="china-ss")
+                y += step
         doc.save(path)
     finally:
         doc.close()
 
 
-def _wrap_line(line: str, max_chars: int) -> list[str]:
-    """Перенести строку по словам в пределах max_chars символов на строку.
-
-    Пустая строка сохраняется как одна пустая часть (вертикальный отступ).
-    Перенос только по пробелам — слова целиком, поэтому короткие подменённые
-    значения (имя, число) не разрываются между строками.
-    """
+def _wrap_line(line, max_chars):
     if not line.strip():
         return [""]
-    words = line.split(" ")
-    out: list[str] = []
-    cur = ""
+    words, out, cur = line.split(" "), [], ""
     for w in words:
         candidate = w if not cur else f"{cur} {w}"
         if len(candidate) <= max_chars:
@@ -167,316 +372,104 @@ def _wrap_line(line: str, max_chars: int) -> list[str]:
     return out
 
 
-# ---------------------------------------------------------------------------
-# Содержимое пар: для каждой пары — функция, которая пишет файлы и
-# возвращает список записей ground_truth.
-# ---------------------------------------------------------------------------
-
-def _pair_finance_docx() -> list[dict]:
-    """Пара 1 (DOCX): финансовый отчёт.
-
-    Вносим: (1) изменение числа выручки и (4) внутреннее расхождение —
-    итоговая премия названа по-разному в двух абзацах проверяемого документа.
-    """
-    name = "finance"
-    src_path = os.path.join(DATASETS_DIR, f"source_{name}.docx")
-    chk_path = os.path.join(DATASETS_DIR, f"check_{name}.docx")
-
-    source = [
-        "Финансовый отчёт компании «Орбита» за 2024 год",
-        "Выручка компании за 2024 год составила 152 миллиона рублей.",
-        "Чистая прибыль по итогам года достигла 18 миллионов рублей.",
-        "Совокупный премиальный фонд сотрудников за год составил 7 миллионов рублей.",
-        "Отчёт подготовлен финансовым отделом и утверждён советом директоров.",
-        "Премиальный фонд в размере 7 миллионов рублей распределён между подразделениями.",
-    ]
-    # В проверяемом: выручка занижена (152 -> 140); премия в двух местах
-    # названа по-разному (7 vs 9) — внутреннее расхождение.
-    check = [
-        "Финансовый отчёт компании «Орбита» за 2024 год",
-        "Выручка компании за 2024 год составила 140 миллионов рублей.",
-        "Чистая прибыль по итогам года достигла 18 миллионов рублей.",
-        "Совокупный премиальный фонд сотрудников за год составил 7 миллионов рублей.",
-        "Отчёт подготовлен финансовым отделом и утверждён советом директоров.",
-        "Премиальный фонд в размере 9 миллионов рублей распределён между подразделениями.",
-    ]
-
-    _write_docx(src_path, source)
-    _write_docx(chk_path, check)
-
-    doc_name = f"check_{name}.docx"
-    src_name = f"source_{name}.docx"
-    return [
-        {
-            "doc": doc_name,
-            "source": src_name,
-            "kind": "contradicted",
-            "location": {
-                "kind": "paragraph",
-                "index": _docx_index(check, "Выручка компании"),
-            },
-            "tampered_value": "140 миллионов рублей",
-            "note": "Изменено число: выручка 152 -> 140 миллионов рублей (тип number).",
-        },
-        {
-            "doc": doc_name,
-            "source": src_name,
-            "kind": "internal_conflict",
-            "location": {
-                "kind": "paragraph",
-                "index": _docx_index(check, "распределён между подразделениями"),
-            },
-            "tampered_value": "9 миллионов рублей",
-            "note": (
-                "Внутреннее расхождение: премиальный фонд назван 7 млн в одном "
-                "абзаце и 9 млн в другом (тип number)."
-            ),
-        },
-    ]
+_WRITERS = {"docx": _write_docx, "pptx": _write_pptx, "pdf": _write_pdf}
 
 
-def _pair_project_pptx() -> list[dict]:
-    """Пара 2 (PPTX): план проекта.
+# --- Главная сборка ---------------------------------------------------------
 
-    Вносим: (2) замену даты запуска и (3) утверждение, противоречащее
-    источнику (статус бюджета).
-    """
-    name = "project"
-    src_path = os.path.join(DATASETS_DIR, f"source_{name}.pptx")
-    chk_path = os.path.join(DATASETS_DIR, f"check_{name}.pptx")
+def build_corpus(docs, numeric, claim, internal, notfound, clean, seed):
+    """Сгенерировать корпус и вернуть манифест (documents + errors + meta)."""
+    os.makedirs(DATASETS_DIR, exist_ok=True)
+    documents, errors = [], []
 
-    source = [
-        ["План проекта «Маяк»", "Краткий обзор ключевых вех проекта."],
-        [
-            "Сроки",
-            "Старт проекта: 1 марта 2025 года.",
-            "Дата запуска в эксплуатацию: 15 сентября 2025 года.",
-        ],
-        [
-            "Команда и бюджет",
-            "Руководитель проекта: Анна Воробьёва.",
-            "Утверждённый бюджет проекта: 12 миллионов рублей.",
-            "Бюджет проекта согласован и не превышен.",
-        ],
-    ]
-    # В проверяемом: дата запуска смещена (15 сентября -> 30 ноября);
-    # добавлено противоречащее утверждение о превышении бюджета.
-    check = [
-        ["План проекта «Маяк»", "Краткий обзор ключевых вех проекта."],
-        [
-            "Сроки",
-            "Старт проекта: 1 марта 2025 года.",
-            "Дата запуска в эксплуатацию: 30 ноября 2025 года.",
-        ],
-        [
-            "Команда и бюджет",
-            "Руководитель проекта: Анна Воробьёва.",
-            "Утверждённый бюджет проекта: 12 миллионов рублей.",
-            "Бюджет проекта превышен на 3 миллиона рублей.",
-        ],
-    ]
+    # Первые `clean` документов делаем чистыми; остальные — с ошибками.
+    for i in range(docs):
+        fmt = _FORMATS[i % len(_FORMATS)]
+        is_clean_doc = i < clean
+        counts = {
+            "numeric": 0 if is_clean_doc else numeric,
+            "claim": 0 if is_clean_doc else claim,
+            "internal": 0 if is_clean_doc else internal,
+            "notfound": 0 if is_clean_doc else notfound,
+            "clean": is_clean_doc,
+        }
+        rendered, gt, is_clean = _generate_pair(i, fmt, counts, seed)
 
-    _write_pptx(src_path, source)
-    _write_pptx(chk_path, check)
+        tag = f"{i:03d}_{_THEMES[i % len(_THEMES)][0].split()[0].lower()}"
+        doc_name = f"check_{tag}.{fmt}"
+        src_name = f"source_{tag}.{fmt}"
+        writer = _WRITERS[fmt]
+        writer(os.path.join(DATASETS_DIR, src_name), rendered["source"],
+               rendered["title"], rendered["dept"])
+        writer(os.path.join(DATASETS_DIR, doc_name), rendered["check"],
+               rendered["title"], rendered["dept"])
 
-    doc_name = f"check_{name}.pptx"
-    src_name = f"source_{name}.pptx"
-    return [
-        {
-            "doc": doc_name,
-            "source": src_name,
-            "kind": "contradicted",
-            "location": {"kind": "slide", "index": 2},
-            "tampered_value": "30 ноября 2025 года",
-            "note": "Заменена дата: запуск 15 сентября -> 30 ноября 2025 (тип date).",
-        },
-        {
-            "doc": doc_name,
-            "source": src_name,
-            "kind": "contradicted",
-            "location": {"kind": "slide", "index": 3},
-            "tampered_value": "Бюджет проекта превышен на 3 миллиона рублей.",
-            "note": (
-                "Вставлено утверждение, противоречащее источнику (в источнике "
-                "бюджет не превышен) (тип statement)."
-            ),
-        },
-    ]
+        documents.append({"doc": doc_name, "source": src_name, "format": fmt,
+                          "clean": is_clean})
 
+        loc_kind = _location_kind(fmt)
+        for e in gt:
+            errors.append({
+                "doc": doc_name,
+                "source": src_name,
+                "format": fmt,
+                "kind": e["kind"],
+                "error_type": e["error_type"],
+                "subtype": e["subtype"],
+                "location": {"kind": loc_kind, "index": e["location_index"]},
+                "tampered_value": e["tampered_value"],
+            })
 
-def _pair_hr_pdf() -> list[dict]:
-    """Пара 3 (PDF): кадровая записка.
-
-    Вносим: (3) утверждение, противоречащее источнику (имя сотрудника), и
-    (1) изменение числа (оклад).
-    """
-    name = "hr"
-    src_path = os.path.join(DATASETS_DIR, f"source_{name}.pdf")
-    chk_path = os.path.join(DATASETS_DIR, f"check_{name}.pdf")
-
-    source = [
-        [
-            "Кадровая записка № 47",
-            "",
-            "На должность ведущего аналитика назначен Игорь Смирнов.",
-            "Должностной оклад сотрудника составляет 95000 рублей в месяц.",
-            "Дата выхода на работу: 10 февраля 2025 года.",
-            "Испытательный срок: три месяца.",
-        ],
-    ]
-    # В проверяемом: имя заменено (Игорь Смирнов -> Павел Смирнов);
-    # оклад изменён (95000 -> 110000).
-    check = [
-        [
-            "Кадровая записка № 47",
-            "",
-            "На должность ведущего аналитика назначен Павел Смирнов.",
-            "Должностной оклад сотрудника составляет 110000 рублей в месяц.",
-            "Дата выхода на работу: 10 февраля 2025 года.",
-            "Испытательный срок: три месяца.",
-        ],
-    ]
-
-    _write_pdf(src_path, source)
-    _write_pdf(chk_path, check)
-
-    doc_name = f"check_{name}.pdf"
-    src_name = f"source_{name}.pdf"
-    return [
-        {
-            "doc": doc_name,
-            "source": src_name,
-            "kind": "contradicted",
-            "location": {"kind": "page", "index": 1},
-            "tampered_value": "Павел Смирнов",
-            "note": (
-                "Заменено имя: Игорь Смирнов -> Павел Смирнов, что противоречит "
-                "источнику (тип name)."
-            ),
-        },
-        {
-            "doc": doc_name,
-            "source": src_name,
-            "kind": "contradicted",
-            "location": {"kind": "page", "index": 1},
-            "tampered_value": "110000 рублей",
-            "note": "Изменено число: оклад 95000 -> 110000 рублей (тип number).",
-        },
-    ]
-
-
-def _pair_estimate_docx() -> list[dict]:
-    """Пара 4 (DOCX): смета договора.
-
-    Вносим: (4) внутреннее расхождение (общая сумма договора названа
-    по-разному в двух абзацах) и (1) изменение числа (срок гарантии),
-    противоречащее источнику.
-    """
-    name = "estimate"
-    src_path = os.path.join(DATASETS_DIR, f"source_{name}.docx")
-    chk_path = os.path.join(DATASETS_DIR, f"check_{name}.docx")
-
-    source = [
-        "Смета по договору № 18 на поставку оборудования",
-        "Общая сумма договора составляет 480 тысяч рублей.",
-        "Стоимость монтажных работ включена в общую сумму и равна 60 тысяч рублей.",
-        "Гарантийный срок на оборудование составляет 24 месяца.",
-        "Итоговая сумма к оплате по договору — 480 тысяч рублей.",
-    ]
-    # В проверяемом: гарантийный срок изменён (24 -> 36); общая сумма названа
-    # по-разному в двух абзацах (480 vs 520) — внутреннее расхождение.
-    check = [
-        "Смета по договору № 18 на поставку оборудования",
-        "Общая сумма договора составляет 480 тысяч рублей.",
-        "Стоимость монтажных работ включена в общую сумму и равна 60 тысяч рублей.",
-        "Гарантийный срок на оборудование составляет 36 месяцев.",
-        "Итоговая сумма к оплате по договору — 520 тысяч рублей.",
-    ]
-
-    _write_docx(src_path, source)
-    _write_docx(chk_path, check)
-
-    doc_name = f"check_{name}.docx"
-    src_name = f"source_{name}.docx"
-    return [
-        {
-            "doc": doc_name,
-            "source": src_name,
-            "kind": "contradicted",
-            "location": {
-                "kind": "paragraph",
-                "index": _docx_index(check, "Гарантийный срок"),
-            },
-            "tampered_value": "36 месяцев",
-            "note": "Изменено число: гарантийный срок 24 -> 36 месяцев (тип number).",
-        },
-        {
-            "doc": doc_name,
-            "source": src_name,
-            "kind": "internal_conflict",
-            "location": {
-                "kind": "paragraph",
-                "index": _docx_index(check, "Итоговая сумма к оплате"),
-            },
-            "tampered_value": "520 тысяч рублей",
-            "note": (
-                "Внутреннее расхождение: общая сумма договора названа 480 тыс. "
-                "в одном абзаце и 520 тыс. в другом (тип number)."
-            ),
-        },
-    ]
-
-
-# Порядок пар фиксирован для детерминированности.
-_PAIR_BUILDERS = [
-    _pair_finance_docx,
-    _pair_project_pptx,
-    _pair_hr_pdf,
-    _pair_estimate_docx,
-]
+    meta = {
+        "seed": seed,
+        "docs": docs,
+        "clean_docs": clean,
+        "errors_total": sum(1 for e in errors if e["kind"] != "not_found"),
+        "not_found_cases": sum(1 for e in errors if e["kind"] == "not_found"),
+        "per_error_doc": {"numeric": numeric, "claim": claim, "internal": internal,
+                          "notfound": notfound},
+    }
+    return {"meta": meta, "documents": documents, "errors": errors}
 
 
 def main() -> None:
-    """Создать все пары документов и ground_truth.json, напечатать сводку."""
+    parser = argparse.ArgumentParser(description="Генератор корпуса ВериДок.")
+    parser.add_argument("--docs", type=int, default=16, help="всего документов")
+    parser.add_argument("--numeric", type=int, default=2, help="numeric-ошибок на док")
+    parser.add_argument("--claim", type=int, default=2, help="claim-ошибок на док")
+    parser.add_argument("--internal", type=int, default=2, help="internal-ошибок на док")
+    parser.add_argument("--notfound", type=int, default=1, help="not_found-кейсов на док")
+    parser.add_argument("--clean", type=int, default=3, help="чистых документов")
+    parser.add_argument("--seed", type=int, default=42, help="seed детерминизма")
+    args = parser.parse_args()
+
     logging.basicConfig(level=logging.INFO)
     start = time.perf_counter()
 
-    os.makedirs(DATASETS_DIR, exist_ok=True)
-
-    ground_truth: list[dict] = []
-    for build in _PAIR_BUILDERS:
-        entries = build()
-        ground_truth.extend(entries)
-        logger.info("Пара готова: %s (%d находок)", build.__name__, len(entries))
-
+    manifest = build_corpus(args.docs, args.numeric, args.claim, args.internal,
+                            args.notfound, args.clean, args.seed)
     with open(GROUND_TRUTH_PATH, "w", encoding="utf-8") as f:
-        json.dump(ground_truth, f, ensure_ascii=False, indent=2)
+        json.dump(manifest, f, ensure_ascii=False, indent=2)
 
     elapsed = time.perf_counter() - start
+    m = manifest["meta"]
+    by_type, by_fmt = {}, {}
+    for e in manifest["errors"]:
+        by_type[e["error_type"]] = by_type.get(e["error_type"], 0) + 1
+        by_fmt[e["format"]] = by_fmt.get(e["format"], 0) + 1
 
-    # Сводка по типам внесений и форматам.
-    kinds: dict[str, int] = {}
-    for e in ground_truth:
-        kinds[e["kind"]] = kinds.get(e["kind"], 0) + 1
-
-    logger.info(
-        "Готово: %d пар, %d находок за %.2f c",
-        len(_PAIR_BUILDERS), len(ground_truth), elapsed,
-    )
-    logger.info("Каталог: %s", DATASETS_DIR)
-    logger.info("ground_truth.json: %s", GROUND_TRUTH_PATH)
-    logger.info("Находки по вердиктам: %s", kinds)
-
-    print("=" * 60)
-    print("Сводка генерации датасета ВериДок")
-    print("=" * 60)
-    print(f"Пар документов:        {len(_PAIR_BUILDERS)}")
-    print(f"Записей ground_truth:  {len(ground_truth)}")
-    print(f"По вердиктам:          {kinds}")
+    print("=" * 64)
+    print("Генерация корпуса ВериДок")
+    print("=" * 64)
+    print(f"Документов:            {len(manifest['documents'])} (чистых: {m['clean_docs']})")
+    print(f"Ошибок-детекций:       {m['errors_total']}  (+ not_found-кейсов: {m['not_found_cases']})")
+    print(f"По типам:              {by_type}")
+    print(f"По форматам (ошибки):  {by_fmt}")
+    print(f"seed:                  {m['seed']}")
     print(f"Каталог:               {DATASETS_DIR}")
-    print(f"ground_truth.json:     {GROUND_TRUTH_PATH}")
+    print(f"Манифест:              {GROUND_TRUTH_PATH}")
     print(f"Время:                 {elapsed:.2f} c")
-    print("=" * 60)
+    print("=" * 64)
 
 
 if __name__ == "__main__":

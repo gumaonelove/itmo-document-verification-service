@@ -1,0 +1,281 @@
+{
+  "summary": {
+    "model": "T-lite-it-2.1",
+    "documents": 16,
+    "clean_docs": 3,
+    "errors_total": 78,
+    "tp": 68,
+    "fp": 0,
+    "fn": 10,
+    "precision": 1.0,
+    "recall": 0.8718,
+    "f1": 0.9315,
+    "by_format": {
+      "docx": {
+        "tp": 26,
+        "fp": 0,
+        "fn": 4,
+        "precision": 1.0,
+        "recall": 0.8667,
+        "f1": 0.9286
+      },
+      "pdf": {
+        "tp": 20,
+        "fp": 0,
+        "fn": 4,
+        "precision": 1.0,
+        "recall": 0.8333,
+        "f1": 0.9091
+      },
+      "pptx": {
+        "tp": 22,
+        "fp": 0,
+        "fn": 2,
+        "precision": 1.0,
+        "recall": 0.9167,
+        "f1": 0.9565
+      }
+    },
+    "by_type": {
+      "numeric": {
+        "tp": 26,
+        "fn": 0,
+        "recall": 1.0
+      },
+      "claim": {
+        "tp": 17,
+        "fn": 9,
+        "recall": 0.6538
+      },
+      "internal": {
+        "tp": 25,
+        "fn": 1,
+        "recall": 0.9615
+      }
+    },
+    "not_found_diagnostic": {
+      "passed": 13,
+      "total": 13,
+      "pass_rate": 1.0
+    },
+    "time": {
+      "avg_sec": 22.661,
+      "median_sec": 22.917
+    },
+    "manual_min_per_doc": 25.0,
+    "manual_sec_per_doc": 1500.0,
+    "speedup_vs_manual": 66.2,
+    "seed": 42,
+    "eval_elapsed_sec": 362.7
+  },
+  "documents": [
+    {
+      "doc": "check_000_финансовый.docx",
+      "format": "docx",
+      "clean": true,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "positives": 0,
+      "findings": 5,
+      "nf_pass": 0,
+      "nf_total": 0,
+      "elapsed_sec": 10.815
+    },
+    {
+      "doc": "check_001_план.pptx",
+      "format": "pptx",
+      "clean": true,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "positives": 0,
+      "findings": 5,
+      "nf_pass": 0,
+      "nf_total": 0,
+      "elapsed_sec": 12.303
+    },
+    {
+      "doc": "check_002_кадровая.pdf",
+      "format": "pdf",
+      "clean": true,
+      "tp": 0,
+      "fp": 0,
+      "fn": 0,
+      "positives": 0,
+      "findings": 4,
+      "nf_pass": 0,
+      "nf_total": 0,
+      "elapsed_sec": 7.939
+    },
+    {
+      "doc": "check_003_смета.docx",
+      "format": "docx",
+      "clean": false,
+      "tp": 5,
+      "fp": 0,
+      "fn": 1,
+      "positives": 7,
+      "findings": 13,
+      "nf_pass": 1,
+      "nf_total": 1,
+      "elapsed_sec": 36.652
+    },
+    {
+      "doc": "check_004_логистический.pptx",
+      "format": "pptx",
+      "clean": false,
+      "tp": 5,
+      "fp": 0,
+      "fn": 1,
+      "positives": 6,
+      "findings": 12,
+      "nf_pass": 1,
+      "nf_total": 1,
+      "elapsed_sec": 19.509
+    },
+    {
+      "doc": "check_005_отчёт.pdf",
+      "format": "pdf",
+      "clean": false,
+      "tp": 4,
+      "fp": 0,
+      "fn": 2,
+      "positives": 5,
+      "findings": 10,
+      "nf_pass": 1,
+      "nf_total": 1,
+      "elapsed_sec": 17.875
+    },
+    {
+      "doc": "check_006_маркетинговый.docx",
+      "format": "docx",
+      "clean": false,
+      "tp": 5,
+      "fp": 0,
+      "fn": 1,
+      "positives": 7,
+      "findings": 13,
+      "nf_pass": 1,
+      "nf_total": 1,
+      "elapsed_sec": 24.953
+    },
+    {
+      "doc": "check_007_производственная.pptx",
+      "format": "pptx",
+      "clean": false,
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "positives": 8,
+      "findings": 14,
+      "nf_pass": 1,
+      "nf_total": 1,
+      "elapsed_sec": 24.342
+    },
+    {
+      "doc": "check_008_финансовый.pdf",
+      "format": "pdf",
+      "clean": false,
+      "tp": 5,
+      "fp": 0,
+      "fn": 1,
+      "positives": 6,
+      "findings": 11,
+      "nf_pass": 1,
+      "nf_total": 1,
+      "elapsed_sec": 24.726
+    },
+    {
+      "doc": "check_009_план.docx",
+      "format": "docx",
+      "clean": false,
+      "tp": 5,
+      "fp": 0,
+      "fn": 1,
+      "positives": 6,
+      "findings": 12,
+      "nf_pass": 1,
+      "nf_total": 1,
+      "elapsed_sec": 20.882
+    },
+    {
+      "doc": "check_010_кадровая.pptx",
+      "format": "pptx",
+      "clean": false,
+      "tp": 5,
+      "fp": 0,
+      "fn": 1,
+      "positives": 7,
+      "findings": 13,
+      "nf_pass": 1,
+      "nf_total": 1,
+      "elapsed_sec": 24.975
+    },
+    {
+      "doc": "check_011_смета.pdf",
+      "format": "pdf",
+      "clean": false,
+      "tp": 5,
+      "fp": 0,
+      "fn": 1,
+      "positives": 7,
+      "findings": 14,
+      "nf_pass": 1,
+      "nf_total": 1,
+      "elapsed_sec": 23.863
+    },
+    {
+      "doc": "check_012_логистический.docx",
+      "format": "docx",
+      "clean": false,
+      "tp": 5,
+      "fp": 0,
+      "fn": 1,
+      "positives": 6,
+      "findings": 11,
+      "nf_pass": 1,
+      "nf_total": 1,
+      "elapsed_sec": 31.493
+    },
+    {
+      "doc": "check_013_отчёт.pptx",
+      "format": "pptx",
+      "clean": false,
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "positives": 8,
+      "findings": 14,
+      "nf_pass": 1,
+      "nf_total": 1,
+      "elapsed_sec": 21.971
+    },
+    {
+      "doc": "check_014_маркетинговый.pdf",
+      "format": "pdf",
+      "clean": false,
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "positives": 7,
+      "findings": 12,
+      "nf_pass": 1,
+      "nf_total": 1,
+      "elapsed_sec": 42.734
+    },
+    {
+      "doc": "check_015_производственная.docx",
+      "format": "docx",
+      "clean": false,
+      "tp": 6,
+      "fp": 0,
+      "fn": 0,
+      "positives": 7,
+      "findings": 11,
+      "nf_pass": 1,
+      "nf_total": 1,
+      "elapsed_sec": 17.55
+    }
+  ]
+}

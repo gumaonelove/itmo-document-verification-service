@@ -1,505 +1,448 @@
-"""Прогон конвейера ВериДок по эталонному набору и подсчёт метрик качества.
+"""Оценка ВериДок на синтетическом корпусе: реальные прогоны run_check + метрики.
 
-Этот модуль загружает eval/datasets/ground_truth.json (схему генерирует
-eval/seed.py), прогоняет run_check по каждому уникальному проверяемому документу
-и сравнивает находки с эталоном.
+Читает манифест ``eval/datasets/ground_truth.json`` (его генерирует ``seed.py``),
+прогоняет ``run_check`` по каждому проверяемому документу с временным каталогом,
+содержащим ТОЛЬКО его источник, и сравнивает находки с внесёнными ошибками.
 
-Ожидаемая схема ground_truth.json (список записей; имена ключей читаем мягко,
-допуская синонимы — это устойчиво к мелким расхождениям с seed.py):
-    [
-      {
-        "check_path":     "<путь к проверяемому документу .pdf/.docx/.pptx>",
-        "source_path":    "<путь к доверенному источнику этого документа>",
-        "kind":           "contradicted" | "internal_conflict",
-        "location":       {"kind": "page"|"slide"|"paragraph", "index": int},
-        "tampered_value": "<подменённое значение, ожидаемое в тексте находки>"
-      },
-      ...
-    ]
-Каждая запись описывает один внедрённый дефект, который пайплайн должен поймать.
-Допустимые синонимы ключей: check_path ~ {doc_path, document, check, doc};
-source_path ~ {source, src, source_file}; kind ~ {verdict, type, defect};
-location ~ {loc} (а index — также из плоского поля page/slide/paragraph/index);
-tampered_value ~ {tampered, value, wrong_value, expected_value}.
+ПРАВИЛО СОПОСТАВЛЕНИЯ (детекция; то же задокументировано в README §9):
+  Находка-«позитив» — это Finding с verdict ∈ {contradicted, internal_conflict}.
+  Внесённая ошибка e (kind ∈ {contradicted, internal_conflict}) считается
+  ПОЙМАННОЙ (TP), если найдётся ещё не использованная находка-позитив f, для
+  которой выполнено хотя бы одно:
+    (а) location.index ошибки совпадает с одним из «покрытых» индексов находки —
+        её claim.location ЛИБО location любого её evidence (для internal_conflict
+        это место второго, конфликтующего утверждения);
+    (б) tampered_value ошибки (норм.) встречается в «стоге» находки — тексте
+        утверждения, цитатах evidence или reasoning.
+  Вердикт-метка НЕ обязана точно совпадать: и contradicted, и internal_conflict
+  засчитываются как детекция (одна и та же ошибка может всплыть обоими способами).
+  Сопоставление жадное 1:1: каждая находка матчится максимум к одной ошибке.
 
-Положительная находка (positive) — Finding с verdict in
-{"contradicted", "internal_conflict"}.
+ДЕДУП ДВОЙНОГО ПОДСЧЁТА: оставшиеся (не сматченные) позитивы, чьи покрытые индексы
+совпадают с локацией уже пойманной ошибки, — это ПОВТОРНАЯ детекция той же ошибки
+(напр. значение помечено и как internal_conflict, и как contradicted), а не ложное
+срабатывание. Они отбрасываются и НЕ идут в FP.
 
-Правило сопоставления (ленивое, осознанно нестрогое — приоритет recall):
-GT-запись считается ПОЙМАННОЙ, если найдётся ещё не использованная positive-
-находка такого же kind (contradicted/internal_conflict) И выполняется хотя бы
-одно из условий:
-  (а) совпадает location.index находки и GT (та же страница/слайд/абзац);
-  (б) tampered_value (без учёта регистра и пробелов) содержится в тексте claim
-      или в одной из цитат evidence находки.
-Жадно: GT-записи обрабатываются по порядку, каждая находка матчится максимум к
-одной GT-записи, каждая GT-запись — максимум к одной находке.
+NOT_FOUND — отдельная диагностика (НЕ входит в recall/precision): для каждого
+not_found-кейса проверяем, что на его локации сервис НЕ выдал ложный позитив.
 
-Метрики на документ и суммарно:
-  recall    = пойманные_GT / всего_GT
-  precision = матченные_positive (= пойманные_GT) / всего_positive
-  f1        = 2 * P * R / (P + R)
-  avg_time  = средний report.elapsed_sec по успешно пройденным документам
+ЧИСТЫЕ документы: внесённых ошибок нет, поэтому любой позитив на них — FP.
 
-Результаты печатаются таблицей и сохраняются в eval/results.json. Недоступность
-моделей/Qdrant (исключение в run_check) ловится: документ помечается failed,
-прогон продолжается.
+Метрики: recall = TP/(TP+FN); precision = TP/(TP+FP); F1; плюс разбивка по
+форматам (P/R/F1) и по типам ошибок (recall — FP не типизированы), время
+(среднее/медиана) и ускорение vs ручная проверка (--manual-min-per-doc).
 
 Запуск:
-    python -m eval.evaluate
+    python eval/evaluate.py --manual-min-per-doc 25
+    LLM_MODEL=<тег> python eval/evaluate.py --manual-min-per-doc 25 --model <тег>
 """
 
+import argparse
+import csv
 import json
 import logging
 import os
 import shutil
+import statistics
 import tempfile
 import time
-from collections import OrderedDict
 
+from config import settings
 from veridoc.pipeline import run_check
 
 logger = logging.getLogger(__name__)
 
-# Каталог этого модуля — пути к данным считаем относительно него.
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _DATASETS = os.path.join(_HERE, "datasets")
 _GROUND_TRUTH = os.path.join(_DATASETS, "ground_truth.json")
-_RESULTS = os.path.join(_HERE, "results.json")
+_RESULTS_DIR = os.path.join(_HERE, "results")
 
-# Вердикты-«позитивы»: находка такого вердикта считается срабатыванием детектора.
-_POSITIVE_VERDICTS = {"contradicted", "internal_conflict"}
-
-# Синонимы ключей GT-записи — читаем схему мягко.
-_CHECK_KEYS = ("check_path", "doc_path", "document", "check", "doc")
-_SOURCE_KEYS = ("source_path", "source", "src", "source_file")
-_KIND_KEYS = ("kind", "verdict", "type", "defect")
-_LOCATION_KEYS = ("location", "loc")
-_INDEX_KEYS = ("index", "page", "slide", "paragraph")
-_TAMPERED_KEYS = (
-    "tampered_value",
-    "tampered",
-    "value",
-    "wrong_value",
-    "expected_value",
-)
+_POSITIVE = {"contradicted", "internal_conflict"}
 
 
-def _first(record: dict, keys: tuple[str, ...]):
-    """Вернуть значение первого присутствующего ключа из keys (иначе None)."""
-    for key in keys:
-        if key in record and record[key] is not None:
-            return record[key]
-    return None
-
-
-def _record_index(record: dict):
-    """Достать location.index из записи: из вложенного location либо плоского поля."""
-    location = _first(record, _LOCATION_KEYS)
-    if isinstance(location, dict):
-        idx = location.get("index")
-        if idx is not None:
-            return idx
-    flat = _first(record, _INDEX_KEYS)
-    return flat
-
+# --- утилиты сопоставления --------------------------------------------------
 
 def _norm(text) -> str:
-    """Нормализовать строку для нестрогого сравнения: lower + схлопнутые пробелы."""
     if text is None:
         return ""
-    return " ".join(str(text).split()).lower()
+    return " ".join(str(text).split()).lower().replace("«", "").replace("»", "")
 
 
-def load_ground_truth(path: str = _GROUND_TRUTH) -> list[dict]:
-    """Загрузить ground_truth.json и нормализовать записи к единой форме.
-
-    Каждая нормализованная запись:
-        {"check_path", "source_path", "kind", "index", "tampered_value", "raw"}.
-    Допускает как голый список записей, так и обёртку {"records": [...]}.
-    """
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    if isinstance(data, dict):
-        # Достаём список из типичных обёрток.
-        data = (
-            data.get("records")
-            or data.get("items")
-            or data.get("ground_truth")
-            or data.get("data")
-            or []
-        )
-    if not isinstance(data, list):
-        raise ValueError(f"ground_truth.json: ожидался список записей, получено {type(data).__name__}")
-
-    records: list[dict] = []
-    for raw in data:
-        if not isinstance(raw, dict):
-            continue
-        kind = _first(raw, _KIND_KEYS)
-        records.append(
-            {
-                "check_path": _first(raw, _CHECK_KEYS),
-                "source_path": _first(raw, _SOURCE_KEYS),
-                "kind": kind if kind in _POSITIVE_VERDICTS else kind,
-                "index": _record_index(raw),
-                "tampered_value": _first(raw, _TAMPERED_KEYS),
-                "raw": raw,
-            }
-        )
-    logger.info("Загружено GT-записей: %d из %s", len(records), path)
-    return records
+def _finding_indices(f) -> set:
+    """Индексы локаций, которые находка «покрывает»: claim + все evidence."""
+    idx = set()
+    loc = getattr(f.claim, "location", None) or {}
+    if loc.get("index") is not None:
+        idx.add(loc["index"])
+    for ev in getattr(f, "evidence", None) or []:
+        evloc = getattr(ev, "location", None) or {}
+        if evloc.get("index") is not None:
+            idx.add(evloc["index"])
+    return idx
 
 
-def _resolve_path(path: str) -> str:
-    """Преобразовать путь/имя файла GT к абсолютному.
-
-    В ground_truth.json doc/source — голые имена файлов, лежащих в eval/datasets/.
-    Поэтому относительные пути ищем сначала в datasets/, затем в eval/, затем в
-    текущем каталоге. Абсолютные пути возвращаем как есть.
-    """
-    if not path:
-        return path
-    if os.path.isabs(path):
-        return path
-    for base in (_DATASETS, _HERE):
-        candidate = os.path.join(base, path)
-        if os.path.exists(candidate):
-            return candidate
-    return os.path.abspath(path)
-
-
-def _finding_index(finding) -> object:
-    """location.index находки (по claim.location)."""
-    location = getattr(finding.claim, "location", None) or {}
-    return location.get("index")
-
-
-def _finding_haystack(finding) -> str:
-    """Нормализованный текст для поиска tampered_value: claim.text + цитаты."""
-    parts = [getattr(finding.claim, "text", "") or ""]
-    for ev in getattr(finding, "evidence", None) or []:
+def _finding_haystack(f) -> str:
+    parts = [getattr(f.claim, "text", "") or "", getattr(f, "reasoning", "") or ""]
+    for ev in getattr(f, "evidence", None) or []:
         parts.append(getattr(ev, "quote", "") or "")
-    reasoning = getattr(finding, "reasoning", "") or ""
-    parts.append(reasoning)
     return _norm(" ".join(parts))
 
 
-def _match_findings(gt_records: list[dict], positives: list) -> dict:
-    """Сопоставить GT-записи документа с positive-находками (жадно, 1:1).
+def _matches(gt_error, finding, finding_idx, finding_hay) -> str | None:
+    """Вернуть причину матча ('index'|'value') или None."""
+    gi = gt_error["location"]["index"]
+    if gi in finding_idx:
+        return "index"
+    val = _norm(gt_error["tampered_value"])
+    if val and val in finding_hay:
+        return "value"
+    return None
 
-    Возвращает словарь с результатами матчинга: списком per-GT исходов, числами
-    пойманных GT и матченных находок.
-    """
-    used = [False] * len(positives)
-    per_gt: list[dict] = []
-    caught = 0
 
-    for gt in gt_records:
-        gt_kind = gt["kind"]
-        gt_index = gt["index"]
-        gt_value = _norm(gt["tampered_value"])
-        match_i = None
-        match_reason = None
-
-        for i, finding in enumerate(positives):
-            if used[i]:
-                continue
-            if finding.verdict != gt_kind:
-                continue
-            # Условие (а): совпал индекс местоположения.
-            by_index = (
-                gt_index is not None
-                and _finding_index(finding) is not None
-                and str(_finding_index(finding)) == str(gt_index)
-            )
-            # Условие (б): подменённое значение встречается в тексте находки.
-            by_value = bool(gt_value) and gt_value in _finding_haystack(finding)
-            if by_index or by_value:
-                match_i = i
-                match_reason = "index" if by_index else "value"
-                break
-
-        if match_i is not None:
-            used[match_i] = True
-            caught += 1
-        per_gt.append(
-            {
-                "kind": gt_kind,
-                "index": gt_index,
-                "tampered_value": gt["tampered_value"],
-                "caught": match_i is not None,
-                "match_reason": match_reason,
-            }
-        )
-
-    matched_positives = sum(used)
-    return {
-        "per_gt": per_gt,
-        "caught": caught,
-        "matched_positives": matched_positives,
-        "used": used,
-    }
-
+# --- прогон одного документа ------------------------------------------------
 
 def _make_sources_dir(source_path: str) -> str:
-    """Создать временный каталог с единственным источником (его копией).
-
-    Возвращает путь к каталогу; вызывающий обязан удалить его сам.
-    """
     tmp = tempfile.mkdtemp(prefix="veridoc_src_")
     if source_path and os.path.isfile(source_path):
         shutil.copy2(source_path, os.path.join(tmp, os.path.basename(source_path)))
     else:
-        logger.warning("Источник не найден или не задан: %r", source_path)
+        logger.warning("Источник не найден: %r", source_path)
     return tmp
 
 
-def _prf1(caught: int, total_gt: int, total_positive: int) -> tuple[float, float, float]:
-    """Посчитать (precision, recall, f1) с защитой от деления на ноль."""
-    recall = caught / total_gt if total_gt else 0.0
-    precision = caught / total_positive if total_positive else 0.0
-    f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
-    return precision, recall, f1
+def _evaluate_doc(doc_meta, gt_errors):
+    """Прогнать один документ и вернуть (rows, stats) для матчинга/диагностики.
 
-
-def evaluate(gt_path: str = _GROUND_TRUTH, results_path: str = _RESULTS) -> dict:
-    """Прогнать пайплайн по эталону и вернуть структурный отчёт с метриками.
-
-    Группирует GT-записи по проверяемому документу; на каждый документ запускает
-    run_check с временным каталогом источников (только его источник). Считает
-    per-document и агрегированные метрики, печатает таблицу, сохраняет results.json.
-    Исключения run_check (нет моделей/Qdrant) ловятся: документ помечается failed.
+    rows — записи для errors.csv (TP/FP/FN/not_found). stats — счётчики.
     """
-    started = time.perf_counter()
-    records = load_ground_truth(gt_path)
+    check_path = os.path.join(_DATASETS, doc_meta["doc"])
+    source_path = os.path.join(_DATASETS, doc_meta["source"])
+    fmt = doc_meta["format"]
 
-    # Группируем GT по проверяемому документу, сохраняя порядок появления.
-    by_doc: "OrderedDict[str, dict]" = OrderedDict()
-    for rec in records:
-        check = rec["check_path"]
-        if not check:
-            logger.warning("GT-запись без check_path пропущена: %r", rec["raw"])
+    sources_dir = _make_sources_dir(source_path)
+    try:
+        report = run_check(check_path, sources_dir)
+    finally:
+        shutil.rmtree(sources_dir, ignore_errors=True)
+
+    findings = report.findings
+    positives = [f for f in findings if f.verdict in _POSITIVE]
+    pos_idx = [_finding_indices(f) for f in positives]
+    pos_hay = [_finding_haystack(f) for f in positives]
+    used = [False] * len(positives)
+
+    detect_errors = [e for e in gt_errors if e["kind"] in _POSITIVE]
+    nf_errors = [e for e in gt_errors if e["kind"] == "not_found"]
+
+    rows = []
+    tp = fn = 0
+    matched_indices = set()  # локации пойманных ошибок (для дедупа FP)
+
+    # 1) Жадно матчим внесённые ошибки.
+    for e in detect_errors:
+        hit_i = hit_reason = None
+        for i, f in enumerate(positives):
+            if used[i]:
+                continue
+            reason = _matches(e, f, pos_idx[i], pos_hay[i])
+            if reason:
+                hit_i, hit_reason = i, reason
+                break
+        if hit_i is not None:
+            used[hit_i] = True
+            tp += 1
+            matched_indices.add(e["location"]["index"])
+            matched_indices |= pos_idx[hit_i]
+            rows.append(_row(doc_meta, e, "TP", positives[hit_i], hit_reason))
+        else:
+            fn += 1
+            rows.append(_row(doc_meta, e, "FN", None, None))
+
+    # 2) Оставшиеся позитивы: дедуп (повтор детекции) либо FP.
+    fp = 0
+    for i, f in enumerate(positives):
+        if used[i]:
             continue
-        group = by_doc.setdefault(
-            check, {"check_path": check, "source_path": rec["source_path"], "records": []}
-        )
-        # Если источник в группе ещё не зафиксирован — берём из текущей записи.
-        if not group["source_path"] and rec["source_path"]:
-            group["source_path"] = rec["source_path"]
-        group["records"].append(rec)
-
-    doc_results: list[dict] = []
-    total_gt = 0
-    total_caught = 0
-    total_positive = 0
-    elapsed_list: list[float] = []
-    failed_docs = 0
-
-    for check, group in by_doc.items():
-        gt_records = group["records"]
-        check_path = _resolve_path(check)
-        source_path = _resolve_path(group["source_path"]) if group["source_path"] else None
-        doc_name = os.path.basename(check)
-
-        entry: dict = {
-            "doc_name": doc_name,
-            "check_path": check_path,
-            "source_path": source_path,
-            "gt_total": len(gt_records),
-        }
-
-        if not os.path.isfile(check_path):
-            logger.error("Документ не найден: %s — помечаю failed", check_path)
-            entry.update(
-                {
-                    "status": "failed",
-                    "error": f"check file not found: {check_path}",
-                    "positives": 0,
-                    "caught": 0,
-                    "precision": 0.0,
-                    "recall": 0.0,
-                    "f1": 0.0,
-                    "elapsed_sec": None,
-                    "per_gt": [
-                        {
-                            "kind": r["kind"],
-                            "index": r["index"],
-                            "tampered_value": r["tampered_value"],
-                            "caught": False,
-                            "match_reason": None,
-                        }
-                        for r in gt_records
-                    ],
-                }
-            )
-            doc_results.append(entry)
-            total_gt += len(gt_records)
-            failed_docs += 1
+        if pos_idx[i] & matched_indices:
+            # повторная детекция уже пойманной ошибки — не считаем FP
             continue
+        fp += 1
+        rows.append(_row_fp(doc_meta, f))
 
-        sources_dir = _make_sources_dir(source_path)
-        try:
-            logger.info("run_check: %s (источник %s)", doc_name, os.path.basename(source_path) if source_path else "—")
-            report = run_check(check_path, sources_dir)
-        except Exception as exc:  # noqa: BLE001 — устойчивость к недоступным моделям/Qdrant
-            logger.exception("run_check упал на %s: %s — помечаю failed", doc_name, exc)
-            entry.update(
-                {
-                    "status": "failed",
-                    "error": f"{type(exc).__name__}: {exc}",
-                    "positives": 0,
-                    "caught": 0,
-                    "precision": 0.0,
-                    "recall": 0.0,
-                    "f1": 0.0,
-                    "elapsed_sec": None,
-                    "per_gt": [
-                        {
-                            "kind": r["kind"],
-                            "index": r["index"],
-                            "tampered_value": r["tampered_value"],
-                            "caught": False,
-                            "match_reason": None,
-                        }
-                        for r in gt_records
-                    ],
-                }
-            )
-            doc_results.append(entry)
-            total_gt += len(gt_records)
-            failed_docs += 1
-            continue
-        finally:
-            shutil.rmtree(sources_dir, ignore_errors=True)
+    # 3) not_found-диагностика: на локации не должно быть ложного позитива.
+    nf_pass = nf_total = 0
+    for e in nf_errors:
+        nf_total += 1
+        gi = e["location"]["index"]
+        false_alarm = any(gi in pos_idx[i] for i in range(len(positives)))
+        # value-match тоже считаем ложным позитивом для not_found
+        if not false_alarm:
+            val = _norm(e["tampered_value"])
+            false_alarm = any(val and val in pos_hay[i] for i in range(len(positives)))
+        outcome = "NF_FALSE_ALARM" if false_alarm else "NF_OK"
+        if not false_alarm:
+            nf_pass += 1
+        rows.append(_row(doc_meta, e, outcome, None, None))
 
-        positives = [f for f in report.findings if f.verdict in _POSITIVE_VERDICTS]
-        match = _match_findings(gt_records, positives)
+    stats = {
+        "doc": doc_meta["doc"], "format": fmt, "clean": doc_meta["clean"],
+        "tp": tp, "fp": fp, "fn": fn,
+        "positives": len(positives), "findings": len(findings),
+        "nf_pass": nf_pass, "nf_total": nf_total,
+        "elapsed_sec": round(report.elapsed_sec, 3),
+    }
+    return rows, stats
 
-        doc_positive = len(positives)
-        doc_caught = match["caught"]
-        precision, recall, f1 = _prf1(doc_caught, len(gt_records), doc_positive)
 
-        entry.update(
-            {
-                "status": "ok",
-                "positives": doc_positive,
-                "caught": doc_caught,
-                "precision": round(precision, 4),
-                "recall": round(recall, 4),
-                "f1": round(f1, 4),
-                "elapsed_sec": round(report.elapsed_sec, 3),
-                "per_gt": match["per_gt"],
-            }
-        )
-        doc_results.append(entry)
-
-        total_gt += len(gt_records)
-        total_caught += doc_caught
-        total_positive += doc_positive
-        elapsed_list.append(report.elapsed_sec)
-
-    # Агрегированные метрики (по успешно пройденным документам для precision/recall
-    # суммируем уже посчитанные числа; failed-документы дают свои GT в знаменатель recall).
-    agg_precision, agg_recall, agg_f1 = _prf1(total_caught, total_gt, total_positive)
-    avg_time = sum(elapsed_list) / len(elapsed_list) if elapsed_list else 0.0
-
-    summary = {
-        "documents": len(by_doc),
-        "documents_ok": len(by_doc) - failed_docs,
-        "documents_failed": failed_docs,
-        "gt_total": total_gt,
-        "positives_total": total_positive,
-        "caught_total": total_caught,
-        "precision": round(agg_precision, 4),
-        "recall": round(agg_recall, 4),
-        "f1": round(agg_f1, 4),
-        "avg_time_sec": round(avg_time, 3),
-        "eval_elapsed_sec": round(time.perf_counter() - started, 3),
+def _row(doc_meta, e, outcome, finding, reason):
+    return {
+        "doc": doc_meta["doc"], "format": doc_meta["format"],
+        "error_type": e["error_type"], "subtype": e["subtype"],
+        "gt_kind": e["kind"], "location_index": e["location"]["index"],
+        "tampered_value": e["tampered_value"], "outcome": outcome,
+        "finding_verdict": finding.verdict if finding else "",
+        "match_reason": reason or "",
     }
 
-    report_obj = {"summary": summary, "documents": doc_results}
 
-    _print_table(doc_results, summary)
-    _save_results(report_obj, results_path)
+def _row_fp(doc_meta, finding):
+    loc = getattr(finding.claim, "location", None) or {}
+    return {
+        "doc": doc_meta["doc"], "format": doc_meta["format"],
+        "error_type": "", "subtype": "", "gt_kind": "",
+        "location_index": loc.get("index", ""),
+        "tampered_value": (getattr(finding.claim, "text", "") or "")[:80],
+        "outcome": "FP", "finding_verdict": finding.verdict, "match_reason": "",
+    }
 
-    logger.info(
-        "Оценка завершена: docs=%d (failed=%d), recall=%.3f, precision=%.3f, f1=%.3f, avg_time=%.2f с",
-        summary["documents"],
-        summary["documents_failed"],
-        summary["recall"],
-        summary["precision"],
-        summary["f1"],
-        summary["avg_time_sec"],
-    )
+
+# --- агрегация и метрики ----------------------------------------------------
+
+def _prf(tp, fp, fn):
+    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
+    return round(precision, 4), round(recall, 4), round(f1, 4)
+
+
+def evaluate(gt_path=_GROUND_TRUTH, model=None, manual_min_per_doc=None,
+             results_path=None):
+    """Прогнать корпус, посчитать метрики, записать results.json/errors.csv/metrics.md."""
+    started = time.perf_counter()
+    with open(gt_path, "r", encoding="utf-8") as fh:
+        manifest = json.load(fh)
+    documents = manifest["documents"]
+    errors = manifest["errors"]
+    model = model or settings.llm_model
+
+    by_doc_errors = {}
+    for e in errors:
+        by_doc_errors.setdefault(e["doc"], []).append(e)
+
+    all_rows = []
+    doc_stats = []
+    for dm in documents:
+        logger.info("run_check: %s (%s)", dm["doc"], dm["format"])
+        doc_errors = by_doc_errors.get(dm["doc"], [])
+        try:
+            rows, stats = _evaluate_doc(dm, doc_errors)
+        except Exception as exc:  # noqa: BLE001 — устойчивость к транзиентным сбоям
+            # Один упавший документ (нет Qdrant/таймаут LLM) не должен валить весь
+            # прогон: его внесённые ошибки засчитываются как FN, прогон продолжается.
+            logger.exception("run_check упал на %s: %s — документ помечен failed", dm["doc"], exc)
+            rows = [_row(dm, e, "FN", None, None)
+                    for e in doc_errors if e["kind"] in _POSITIVE]
+            stats = {
+                "doc": dm["doc"], "format": dm["format"], "clean": dm["clean"],
+                "tp": 0, "fp": 0,
+                "fn": sum(1 for e in doc_errors if e["kind"] in _POSITIVE),
+                "positives": 0, "findings": 0,
+                "nf_pass": 0,
+                "nf_total": sum(1 for e in doc_errors if e["kind"] == "not_found"),
+                "elapsed_sec": 0.0, "status": "failed",
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+        all_rows.extend(rows)
+        doc_stats.append(stats)
+
+    # --- агрегаты ---
+    def agg(rows_filter):
+        tp = sum(1 for r in all_rows if r["outcome"] == "TP" and rows_filter(r))
+        fp = sum(1 for r in all_rows if r["outcome"] == "FP" and rows_filter(r))
+        fn = sum(1 for r in all_rows if r["outcome"] == "FN" and rows_filter(r))
+        return tp, fp, fn
+
+    tp, fp, fn = agg(lambda r: True)
+    precision, recall, f1 = _prf(tp, fp, fn)
+
+    by_format = {}
+    for fmt in sorted({d["format"] for d in documents}):
+        t, p, n = agg(lambda r, fmt=fmt: r["format"] == fmt)
+        pr, rc, f = _prf(t, p, n)
+        by_format[fmt] = {"tp": t, "fp": p, "fn": n, "precision": pr,
+                          "recall": rc, "f1": f}
+
+    by_type = {}
+    for et in ("numeric", "claim", "internal"):
+        t = sum(1 for r in all_rows if r["outcome"] == "TP" and r["error_type"] == et)
+        n = sum(1 for r in all_rows if r["outcome"] == "FN" and r["error_type"] == et)
+        rc = round(t / (t + n), 4) if (t + n) else 0.0
+        by_type[et] = {"tp": t, "fn": n, "recall": rc}
+
+    nf_pass = sum(s["nf_pass"] for s in doc_stats)
+    nf_total = sum(s["nf_total"] for s in doc_stats)
+    times = [s["elapsed_sec"] for s in doc_stats]
+    avg_t = round(statistics.mean(times), 3) if times else 0.0
+    med_t = round(statistics.median(times), 3) if times else 0.0
+
+    speedup = None
+    manual_sec = None
+    if manual_min_per_doc is not None and avg_t > 0:
+        manual_sec = manual_min_per_doc * 60.0
+        speedup = round(manual_sec / avg_t, 1)
+
+    summary = {
+        "model": model,
+        "documents": len(documents),
+        "clean_docs": sum(1 for d in documents if d["clean"]),
+        "errors_total": tp + fn,
+        "tp": tp, "fp": fp, "fn": fn,
+        "precision": precision, "recall": recall, "f1": f1,
+        "by_format": by_format,
+        "by_type": by_type,
+        "not_found_diagnostic": {
+            "passed": nf_pass, "total": nf_total,
+            "pass_rate": round(nf_pass / nf_total, 4) if nf_total else None,
+        },
+        "time": {"avg_sec": avg_t, "median_sec": med_t},
+        "manual_min_per_doc": manual_min_per_doc,
+        "manual_sec_per_doc": manual_sec,
+        "speedup_vs_manual": speedup,
+        "seed": manifest.get("meta", {}).get("seed"),
+        "eval_elapsed_sec": round(time.perf_counter() - started, 1),
+    }
+    report_obj = {"summary": summary, "documents": doc_stats}
+
+    # --- запись артефактов ---
+    # Имена errors.csv/metrics.md наследуют суффикс модели из results_path, чтобы
+    # прогоны разных моделей НЕ затирали артефакты друг друга (results.json →
+    # errors.csv/metrics.md; results_qwen3-coder.json → errors_qwen3-coder.csv/…).
+    os.makedirs(_RESULTS_DIR, exist_ok=True)
+    if results_path is None:
+        results_path = os.path.join(_HERE, "results.json")
+    base = os.path.splitext(os.path.basename(results_path))[0]
+    suffix = base[len("results"):] if base.startswith("results") else "_" + base
+    with open(results_path, "w", encoding="utf-8") as fh:
+        json.dump(report_obj, fh, ensure_ascii=False, indent=2)
+
+    errors_csv = os.path.join(_HERE, f"errors{suffix}.csv")
+    with open(errors_csv, "w", encoding="utf-8", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=[
+            "doc", "format", "error_type", "subtype", "gt_kind",
+            "location_index", "tampered_value", "outcome",
+            "finding_verdict", "match_reason"])
+        w.writeheader()
+        w.writerows(all_rows)
+
+    metrics_md = os.path.join(_RESULTS_DIR, f"metrics{suffix}.md")
+    _write_metrics_md(summary, manifest, metrics_md)
+    _print_summary(summary)
+    logger.info("Артефакты: %s, %s, %s", results_path, errors_csv, metrics_md)
     return report_obj
 
 
-def _print_table(doc_results: list[dict], summary: dict) -> None:
-    """Напечатать таблицу по документам и итоговую сводку."""
-    headers = ("Документ", "Статус", "GT", "Pos", "Поймано", "Recall", "Precision", "F1", "Время, с")
-    rows: list[tuple[str, ...]] = []
-    for d in doc_results:
-        elapsed = "-" if d["elapsed_sec"] is None else f"{d['elapsed_sec']:.2f}"
-        rows.append(
-            (
-                d["doc_name"],
-                d["status"],
-                str(d["gt_total"]),
-                str(d["positives"]),
-                str(d["caught"]),
-                f"{d['recall']:.3f}",
-                f"{d['precision']:.3f}",
-                f"{d['f1']:.3f}",
-                elapsed,
-            )
-        )
+def _write_metrics_md(s, manifest, path):
+    """Финальная таблица для слайдов 07–08."""
+    m = manifest.get("meta", {})
+    lines = []
+    lines.append("# ВериДок — метрики оценки (для слайдов 07–08)\n")
+    lines.append(f"**Модель:** `{s['model']}` · **seed:** {s['seed']} · "
+                 f"**temperature:** 0.0 (детерминизм)\n")
+    lines.append(f"**Корпус:** {s['documents']} документов "
+                 f"(из них чистых: {s['clean_docs']}), внесённых ошибок-детекций: "
+                 f"{s['errors_total']}; форматы DOCX/PPTX/PDF.\n")
+    lines.append("## Итоговые метрики\n")
+    lines.append("| Метрика | Значение |")
+    lines.append("|---|---|")
+    lines.append(f"| Recall (обнаружено ошибок) | **{s['recall']:.3f}** ({round(s['recall']*100)}%) |")
+    lines.append(f"| Precision (точность) | **{s['precision']:.3f}** ({round(s['precision']*100)}%) |")
+    lines.append(f"| F1 | **{s['f1']:.3f}** |")
+    lines.append(f"| Среднее время / документ | {s['time']['avg_sec']:.1f} с |")
+    lines.append(f"| Медианное время / документ | {s['time']['median_sec']:.1f} с |")
+    if s["speedup_vs_manual"]:
+        lines.append(f"| Ручная проверка (оценка) | {s['manual_min_per_doc']} мин/док |")
+        lines.append(f"| **Ускорение vs ручная** | **×{s['speedup_vs_manual']}** |")
+    lines.append("")
+    lines.append("## По форматам\n")
+    lines.append("| Формат | Recall | Precision | F1 | TP/FP/FN |")
+    lines.append("|---|---|---|---|---|")
+    for fmt, v in s["by_format"].items():
+        lines.append(f"| {fmt} | {v['recall']:.3f} | {v['precision']:.3f} | "
+                     f"{v['f1']:.3f} | {v['tp']}/{v['fp']}/{v['fn']} |")
+    lines.append("")
+    lines.append("## По типам ошибок (recall)\n")
+    lines.append("| Тип | Recall | TP/FN |")
+    lines.append("|---|---|---|")
+    for et, v in s["by_type"].items():
+        lines.append(f"| {et} | {v['recall']:.3f} | {v['tp']}/{v['fn']} |")
+    lines.append("\n> Precision по типам не приводится: ложные срабатывания (FP) не "
+                 "привязаны к типу внесённой ошибки. P/R/F1 по форматам и общие — приводятся.\n")
+    nf = s["not_found_diagnostic"]
+    lines.append("## Диагностика not_found (отдельно от recall/precision)\n")
+    if nf["total"]:
+        lines.append(f"Корректно не выдал ложный contradicted: **{nf['passed']}/{nf['total']}** "
+                     f"({round((nf['pass_rate'] or 0)*100)}%).\n")
+    else:
+        lines.append("not_found-кейсы в наборе отсутствуют.\n")
+    lines.append("## Размер выборки и ограничения\n")
+    lines.append(f"- N = {s['documents']} документов, {s['errors_total']} внесённых ошибок "
+                 f"(+ {nf['total']} not_found-кейсов).")
+    lines.append("- Набор **синтетический**: ошибки внесены программно по фиксированному "
+                 f"seed={s['seed']}; повтор генерации даёт тот же корпус.")
+    lines.append("- Все вызовы LLM при `temperature=0`. Числа получены реальными прогонами "
+                 "`run_check` (без заглушек).")
+    lines.append("- Локальный стек: LLM по OpenAI-совместимому эндпоинту (Ollama), эмбеддер "
+                 "Qwen3-Embedding-8B, векторное хранилище Qdrant.")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines) + "\n")
 
-    limits = (40, 8, 4, 4, 8, 7, 9, 6, 9)
-    widths = [len(h) for h in headers]
-    for row in rows:
-        for i, cell in enumerate(row):
-            widths[i] = min(max(widths[i], len(cell)), limits[i])
 
-    def _fmt(cells: tuple[str, ...]) -> str:
-        out = []
-        for i, cell in enumerate(cells):
-            text = cell if len(cell) <= widths[i] else cell[: widths[i] - 1] + "…"
-            out.append(text.ljust(widths[i]))
-        return " | ".join(out)
-
-    print("\nРезультаты оценки ВериДок")
-    print(_fmt(headers))
-    print("-+-".join("-" * w for w in widths))
-    for row in rows:
-        print(_fmt(row))
-
-    print("\nИтог:")
-    print(f"  документов:           {summary['documents']} (ok={summary['documents_ok']}, failed={summary['documents_failed']})")
-    print(f"  всего GT:             {summary['gt_total']}")
-    print(f"  всего positive:       {summary['positives_total']}")
-    print(f"  поймано GT:           {summary['caught_total']}")
-    print(f"  recall:               {summary['recall']:.3f}")
-    print(f"  precision:            {summary['precision']:.3f}")
-    print(f"  f1:                   {summary['f1']:.3f}")
-    print(f"  среднее время/док:    {summary['avg_time_sec']:.2f} с")
-
-
-def _save_results(report_obj: dict, path: str) -> None:
-    """Сохранить отчёт об оценке в JSON (UTF-8, человекочитаемо)."""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(report_obj, f, ensure_ascii=False, indent=2)
-    logger.info("Результаты сохранены: %s", path)
+def _print_summary(s):
+    print("\n" + "=" * 64)
+    print(f"ВериДок — оценка (модель: {s['model']})")
+    print("=" * 64)
+    print(f"  документов:        {s['documents']} (чистых: {s['clean_docs']})")
+    print(f"  TP/FP/FN:          {s['tp']}/{s['fp']}/{s['fn']}")
+    print(f"  recall:            {s['recall']:.3f}")
+    print(f"  precision:         {s['precision']:.3f}")
+    print(f"  f1:                {s['f1']:.3f}")
+    print(f"  время ср/медиана:  {s['time']['avg_sec']:.1f} / {s['time']['median_sec']:.1f} с")
+    nf = s["not_found_diagnostic"]
+    if nf["total"]:
+        print(f"  not_found:         {nf['passed']}/{nf['total']} корректно")
+    if s["speedup_vs_manual"]:
+        print(f"  ускорение vs ручн: ×{s['speedup_vs_manual']} (ручная ~{s['manual_min_per_doc']} мин/док)")
+    fmt_str = ", ".join("{}: R={:.2f}".format(k, v["recall"]) for k, v in s["by_format"].items())
+    type_str = ", ".join("{}: {:.2f}".format(k, v["recall"]) for k, v in s["by_type"].items())
+    print(f"  по форматам:       {fmt_str}")
+    print(f"  по типам (recall): {type_str}")
+    print("=" * 64)
 
 
 def main() -> None:
-    """Точка входа: настроить логирование и запустить оценку."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
-    evaluate()
+    parser = argparse.ArgumentParser(description="Оценка ВериДок на корпусе.")
+    parser.add_argument("--manual-min-per-doc", type=float, default=None,
+                        help="оценка времени ручной проверки одного документа (мин)")
+    parser.add_argument("--model", default=None, help="метка модели для отчёта")
+    parser.add_argument("--gt", default=_GROUND_TRUTH, help="путь к ground_truth.json")
+    parser.add_argument("--results", default=None,
+                        help="путь к results.json (по умолчанию eval/results.json)")
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    evaluate(gt_path=args.gt, model=args.model,
+             manual_min_per_doc=args.manual_min_per_doc, results_path=args.results)
 
 
 if __name__ == "__main__":
