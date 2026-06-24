@@ -43,6 +43,7 @@ class Evidence:
     chunk_id: str
     quote: str                      # ≤ 30 слов из источника
     score: float
+    location: Optional[Location] = None  # место фрагмента в источнике (стр./слайд/абзац)
 
 
 @dataclass

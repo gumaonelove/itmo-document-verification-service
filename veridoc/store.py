@@ -41,8 +41,13 @@ class QdrantStore:
             self.client = QdrantClient(url=url)
             logger.info("QdrantStore: HTTP режим, url=%s", url)
 
-    def ensure_collection(self) -> None:
-        """Создать коллекцию при отсутствии; пересоздать при несовпадении размерности."""
+    def ensure_collection(self, recreate: bool = False) -> None:
+        """Создать коллекцию при отсутствии; пересоздать при несовпадении размерности.
+
+        recreate=True пересоздаёт коллекцию безусловно (удалив старую) — так каждая
+        проверка стартует с ЧИСТОЙ коллекции и поиск не находит фрагменты из других
+        документов/прошлых прогонов (иначе коллекция накапливает чужие чанки).
+        """
         params = VectorParams(size=self.dim, distance=Distance.COSINE)
 
         exists = False
@@ -54,6 +59,13 @@ class QdrantStore:
                 exists = True
             except Exception:  # noqa: BLE001
                 exists = False
+
+        if recreate:
+            if exists:
+                self.client.delete_collection(self.collection)
+            self.client.create_collection(self.collection, vectors_config=params)
+            logger.info("Коллекция '%s' пересоздана начисто (dim=%d)", self.collection, self.dim)
+            return
 
         if not exists:
             self.client.create_collection(self.collection, vectors_config=params)
@@ -115,6 +127,7 @@ class QdrantStore:
                         "source_id": ch["source_id"],
                         "text": ch["text"],
                         "chunk_id": chunk_id,
+                        "location": ch.get("location"),
                     },
                 )
             )
@@ -136,12 +149,14 @@ class QdrantStore:
     ) -> list[Evidence]:
         """Найти top_k ближайших чанков. quote — полный текст чанка-кандидата."""
         t0 = time.perf_counter()
-        hits = self.client.search(
+        # query_points — актуальный API qdrant-client (бывший .search() удалён
+        # в свежих версиях клиента). Возвращает QueryResponse с .points.
+        hits = self.client.query_points(
             collection_name=self.collection,
-            query_vector=query_vector,
+            query=query_vector,
             limit=top_k,
             with_payload=True,
-        )
+        ).points
 
         results: list[Evidence] = []
         for hit in hits:
@@ -152,6 +167,7 @@ class QdrantStore:
                     chunk_id=payload.get("chunk_id", ""),
                     quote=payload["text"],
                     score=hit.score,
+                    location=payload.get("location"),
                 )
             )
 

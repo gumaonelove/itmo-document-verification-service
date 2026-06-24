@@ -13,6 +13,7 @@ import argparse
 import logging
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 from config import settings
@@ -75,26 +76,33 @@ def _index_sources(sources_dir: str, embedder: Embedder, store: QdrantStore) -> 
     t0 = time.perf_counter()
     files = _list_source_files(sources_dir)
     chunks_payload: list[dict] = []
+    counter = 0  # сквозной счётчик для уникальных chunk_id между сегментами/файлами
 
     for file in files:
         src_segments = parse_document(file)
         if not src_segments:
             continue
         source_id = src_segments[0].doc_id
-        text = "\n".join(seg.text for seg in src_segments)
-        pieces = _chunk_text(text, settings.chunk_size, settings.chunk_overlap)
-        if not pieces:
+        # Чанкуем КАЖДЫЙ сегмент отдельно — так чанк сохраняет место (страницу/
+        # слайд/абзац) сегмента-источника, и его можно показать в отчёте.
+        pieces_with_loc: list[tuple[str, dict]] = []
+        for seg in src_segments:
+            for piece in _chunk_text(seg.text, settings.chunk_size, settings.chunk_overlap):
+                pieces_with_loc.append((piece, seg.location))
+        if not pieces_with_loc:
             continue
-        vectors = embedder.embed_documents(pieces)
-        for k, (piece, vector) in enumerate(zip(pieces, vectors)):
+        vectors = embedder.embed_documents([p for p, _ in pieces_with_loc])
+        for (piece, location), vector in zip(pieces_with_loc, vectors):
             chunks_payload.append(
                 {
-                    "chunk_id": f"{source_id}#c{k}",
+                    "chunk_id": f"{source_id}#c{counter}",
                     "source_id": source_id,
                     "text": piece,
+                    "location": location,
                     "vector": vector,
                 }
             )
+            counter += 1
 
     store.index_sources(chunks_payload)
     logger.info(
@@ -129,7 +137,9 @@ def run_check(doc_path: str, sources_dir: str | None) -> Report:
     if source_files:
         embedder = Embedder()
         store = QdrantStore()
-        store.ensure_collection()
+        # recreate=True: каждая проверка индексирует ТОЛЬКО свои источники, чтобы
+        # поиск не подмешивал чанки прошлых документов/прогонов.
+        store.ensure_collection(recreate=True)
         _index_sources(sources_dir, embedder, store)
     else:
         logger.info("Этап index: источники не предоставлены — пропуск")
@@ -142,20 +152,29 @@ def run_check(doc_path: str, sources_dir: str | None) -> Report:
     )
 
     # 4) Поиск + верификация по каждому утверждению.
+    # Запросы независимы → выполняем ПАРАЛЛЕЛЬНО (embed_query + search + verify
+    # на утверждение). ThreadPoolExecutor.map сохраняет порядок, результат
+    # детерминирован. Без источников — мгновенный not_found без LLM/поиска.
     t0 = time.perf_counter()
-    findings: list[Finding] = []
-    for claim in claims:
-        if store is not None and embedder is not None:
+    if store is not None and embedder is not None and claims:
+
+        def _retrieve_and_verify(claim) -> Finding:
             qv = embedder.embed_query(claim.text)
             evs = store.search(qv, settings.top_k)
-            finding = verify_claim(claim, evs)
-        else:
-            finding = Finding(
+            return verify_claim(claim, evs)
+
+        workers = max(1, min(settings.llm_concurrency, len(claims)))
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            findings = list(executor.map(_retrieve_and_verify, claims))
+    else:
+        findings = [
+            Finding(
                 claim=claim,
                 verdict="not_found",
                 reasoning="Источники не предоставлены",
             )
-        findings.append(finding)
+            for claim in claims
+        ]
     logger.info(
         "Этап retrieve+verify: %d находок за %.2f с",
         len(findings),
@@ -163,6 +182,10 @@ def run_check(doc_path: str, sources_dir: str | None) -> Report:
     )
 
     # 5) Поиск внутренних противоречий.
+    # ПРИМ.: намеренно НЕ дедуплицируем contradicted-находки, пересекающиеся с
+    # internal_conflict. Противоречие источнику — первичный сигнал, и его сокрытие
+    # ради «чистоты» precision однажды прячет реальную ошибку (проверено на eval:
+    # дедуп терял настоящий contradicted на project). Лишняя пометка корректна.
     t0 = time.perf_counter()
     conflicts = check_consistency(claims)
     findings += conflicts

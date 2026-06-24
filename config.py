@@ -29,11 +29,20 @@ class Settings(BaseSettings):
     llm_api_key: str = "not-needed"
     llm_temperature: float = 0.0
     llm_max_tokens: int = 1500
+    # Параллелизм независимых LLM-вызовов (extract по сегментам, verify по
+    # утверждениям). Ollama обслуживает конкурентные запросы; на Apple Silicon
+    # практический потолок ~2 (GPU насыщается). Порядок результатов сохраняется.
+    llm_concurrency: int = 4
 
-    # --- Эмбеддинги: sentence-transformers на MPS ---
+    # --- Эмбеддинги ---
+    # Бэкенд: "sentence-transformers" (локальная модель на MPS) или
+    # "ollama" (OpenAI-совместимый /v1/embeddings, напр. qwen3-embedding:8b).
+    embed_backend: str = "sentence-transformers"
     embed_model: str = "Qwen/Qwen3-Embedding-8B"
     embed_dim: int = 4096
     embed_device: str = "mps"
+    # Эндпойнт для embed_backend="ollama".
+    embed_base_url: str = "http://localhost:11434/v1"
 
     # --- Qdrant: HTTP по url ИЛИ embedded по qdrant_path ---
     qdrant_url: str = "http://localhost:6333"
@@ -45,6 +54,10 @@ class Settings(BaseSettings):
     chunk_overlap: int = 150
     top_k: int = 5
     max_claims_per_segment: int = 12
+    # Сколько верхних по score фрагментов реально подаётся в verify (полным
+    # текстом). Меньше фрагментов → меньше префилл LLM и меньше шума; для проверки
+    # факта обычно хватает 2-3. Снижает время на длинных источниках.
+    verify_evidence_k: int = 3
 
     # Порог косинусной близости: если max score найденного < порога → not_found.
     score_threshold: float = 0.3

@@ -8,6 +8,7 @@
 import json
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from config import settings
 from veridoc import prompts
@@ -22,40 +23,49 @@ _VALID_TYPES = {"number", "date", "name", "statement"}
 _RAW_VALUE_TYPES = {"number", "date"}
 
 
+def _fetch_segment_items(segment: Segment) -> list:
+    """LLM-вызов по одному сегменту → список сырых элементов (или []).
+
+    Изолированная единица работы для параллельного запуска. Битый JSON и
+    не-списочный ответ деградируют мягко в пустой список (с warning).
+    """
+    messages = [{"role": "user", "content": prompts.extract_prompt(segment.text)}]
+    try:
+        data = chat_json(messages)
+    except json.JSONDecodeError:
+        logger.warning("Сегмент %s: LLM вернул невалидный JSON — пропускаю", segment.id)
+        return []
+    if not isinstance(data, list):
+        logger.warning(
+            "Сегмент %s: ответ LLM не список (%s) — пропускаю",
+            segment.id,
+            type(data).__name__,
+        )
+        return []
+    return data
+
+
 def extract_claims(segments: list[Segment]) -> list[Claim]:
     """Извлечь проверяемые утверждения из всех сегментов.
 
-    Для каждого сегмента шлём один запрос к LLM и ждём JSON-массив объектов
-    вида {"text", "type", "raw_value"}. Сегменты с не-списочным ответом
-    пропускаются с warning. На сегмент берём не более
-    ``settings.max_claims_per_segment`` утверждений.
+    LLM-вызовы по сегментам идут ПАРАЛЛЕЛЬНО (до ``settings.llm_concurrency``
+    одновременно), но сборка Claim с сквозными id — последовательно в исходном
+    порядке сегментов, поэтому результат детерминирован. На сегмент берём не
+    более ``settings.max_claims_per_segment`` утверждений.
     """
     started = time.perf_counter()
+    if not segments:
+        return []
+
+    workers = max(1, min(settings.llm_concurrency, len(segments)))
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        # map сохраняет порядок сегментов → детерминированная нумерация id ниже.
+        per_segment = list(executor.map(_fetch_segment_items, segments))
+
     claims: list[Claim] = []
     counter = 0  # сквозной счётчик для id вида C0001
 
-    for segment in segments:
-        messages = [
-            {"role": "user", "content": prompts.extract_prompt(segment.text)}
-        ]
-        # Неустранимо битый JSON от LLM не должен валить извлечение всего
-        # документа — пропускаем проблемный сегмент, как и не-списочный ответ.
-        try:
-            data = chat_json(messages)
-        except json.JSONDecodeError:
-            logger.warning(
-                "Сегмент %s: LLM вернул невалидный JSON — пропускаю", segment.id
-            )
-            continue
-
-        if not isinstance(data, list):
-            logger.warning(
-                "Сегмент %s: ответ LLM не список (%s) — пропускаю",
-                segment.id,
-                type(data).__name__,
-            )
-            continue
-
+    for segment, data in zip(segments, per_segment):
         # Ограничиваем число утверждений на сегмент.
         for item in data[: settings.max_claims_per_segment]:
             if not isinstance(item, dict):

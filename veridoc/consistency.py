@@ -12,7 +12,7 @@ import time
 from config import settings
 from veridoc import prompts
 from veridoc.llm import chat_json
-from veridoc.models import Claim, Finding
+from veridoc.models import Claim, Evidence, Finding
 
 logger = logging.getLogger(__name__)
 
@@ -73,22 +73,23 @@ def check_consistency(claims: list[Claim]) -> list[Finding]:
         claim_a = by_id[a]
         claim_b = by_id[b]
         reason_text = reason if isinstance(reason, str) else str(reason)
-        # В reasoning явно фиксируем ОБА значения с их местами: так находка
-        # самодостаточна (для UI) и устойчиво матчится в оценке независимо от
-        # того, какой id LLM поставил в паре первым.
-        loc_a = f"{claim_a.location.get('kind', '?')} {claim_a.location.get('index', '?')}"
-        loc_b = f"{claim_b.location.get('kind', '?')} {claim_b.location.get('index', '?')}"
-        summary = (
-            f"Конфликт значений: [{claim_a.id}] '{claim_a.raw_value}' ({loc_a}) "
-            f"↔ [{claim_b.id}] '{claim_b.raw_value}' ({loc_b})"
+        # Конфликтующее утверждение кладём отдельным фрагментом-evidence: в UI
+        # колонка «Обоснование» покажет ИМЕННО различающееся утверждение (claim_b),
+        # не дублируя «Утверждение» (claim_a) и «Где» (его место). Текст claim_b
+        # содержит словесное значение, поэтому оценка по value остаётся устойчивой.
+        partner = Evidence(
+            source_id=f"конфликт с {claim_b.id}",
+            chunk_id=claim_b.id,
+            quote=claim_b.text,
+            score=0.0,
+            location=claim_b.location,
         )
-        full_reason = f"{summary}. {reason_text}" if reason_text else summary
         findings.append(
             Finding(
                 claim=claim_a,
                 verdict="internal_conflict",
-                evidence=[],
-                reasoning=full_reason,
+                evidence=[partner],
+                reasoning=reason_text,
                 conflict_with=claim_b.id,
             )
         )

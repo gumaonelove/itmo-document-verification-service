@@ -65,41 +65,83 @@ def _location_label(location) -> str:
 
 
 def _reasoning_cell(finding) -> str:
-    """Текст обоснования: рассуждение + цитата (или ссылка на конфликтующий claim)."""
-    parts = []
-    if finding.reasoning:
-        parts.append(finding.reasoning)
-    # Опорные цитаты из источников.
+    """Только различающийся фрагмент.
+
+    Здесь НЕ дублируются «Утверждение» (текст факта) и «Где» (место) — показывается
+    лишь то, что отличается: цитата из источника (для supported/contradicted) либо
+    конфликтующее утверждение (для internal_conflict). Поясняющий текст модели
+    опускается, чтобы колонка не повторяла соседние.
+    """
+    fragments = [ev.quote.strip() for ev in finding.evidence if ev.quote and ev.quote.strip()]
+    if fragments:
+        return " · ".join(f"«{q}»" for q in fragments)
+    # Фрагмента нет (например, not_found): короткая пометка.
+    if finding.verdict == "not_found":
+        return "не найдено в источниках"
+    return finding.reasoning or "—"
+
+
+def _source_label(finding) -> str:
+    """Название доверенного документа, с которым найдено расхождение.
+
+    Для contradicted/supported — имя(имена) источника из найденных фрагментов
+    (важно, когда источников несколько). Для internal_conflict — расхождение
+    внутри самого проверяемого документа. Для not_found — прочерк.
+    """
+    if finding.verdict == "internal_conflict":
+        return "тот же документ"
+    seen: list[str] = []
     for ev in finding.evidence:
-        if ev.quote:
-            parts.append(f"«{ev.quote}» [{ev.source_id}]")
-    # Для внутреннего конфликта — ссылка на противоречащее утверждение.
-    if finding.verdict == "internal_conflict" and finding.conflict_with:
-        parts.append(f"Конфликтует с: {finding.conflict_with}")
-    return "\n".join(parts) if parts else "—"
+        if ev.source_id and ev.source_id not in seen:
+            seen.append(ev.source_id)
+    return ", ".join(seen) if seen else "—"
+
+
+def _source_location_label(finding) -> str:
+    """Адрес различающегося фрагмента в источнике (или в том же документе — для
+    внутреннего конфликта). Берётся из location найденного фрагмента."""
+    for ev in finding.evidence:
+        if ev.location:
+            return _location_label(ev.location)
+    return "—"
 
 
 def _findings_dataframe(findings) -> pd.DataFrame:
-    """Собрать таблицу находок и скрытую колонку вердикта для раскраски."""
+    """Собрать таблицу находок (только видимые колонки, без служебных).
+
+    Колонки: «Утверждение» — факт из проверяемого документа; «Где в документе» —
+    его адрес; «Источник» — доверенный документ, с которым расхождение;
+    «Фрагмент источника» — различающийся факт (цитата источника либо конфликтующее
+    утверждение).
+    """
     rows = []
     for f in findings:
         rows.append(
             {
                 "Утверждение": f.claim.text,
                 "Вердикт": VERDICT_LABELS.get(f.verdict, f.verdict),
-                "Где": _location_label(f.claim.location),
-                "Обоснование (цитата)": _reasoning_cell(f),
-                "_verdict": f.verdict,  # служебная колонка для Styler
+                "Где в документе": _location_label(f.claim.location),
+                "Источник": _source_label(f),
+                "Где в источнике": _source_location_label(f),
+                "Фрагмент источника": _reasoning_cell(f),
             }
         )
     return pd.DataFrame(rows)
 
 
-def _style_rows(row: pd.Series) -> list[str]:
-    """Покрасить строку DataFrame по её вердикту (для Styler.apply, axis=1)."""
-    color = VERDICT_COLORS.get(row["_verdict"], "")
-    style = f"background-color: {color}" if color else ""
-    return [style] * len(row)
+def _row_styler(verdicts: list[str]):
+    """Фабрика раскраски строк по вердиктам.
+
+    Вердикт берётся по позиции строки (row.name), поэтому служебную колонку
+    с вердиктом НЕ нужно держать в самой таблице.
+    """
+
+    def _style(row: pd.Series) -> list[str]:
+        color = VERDICT_COLORS.get(verdicts[row.name], "")
+        style = f"background-color: {color}" if color else ""
+        return [style] * len(row)
+
+    return _style
 
 
 def _render_summary(report) -> None:
@@ -147,11 +189,26 @@ def _render_report(report) -> None:
         st.info("Проверяемых утверждений не найдено.")
         return
 
-    df = _findings_dataframe(report.findings)
-    styler = (
-        df.style.apply(_style_rows, axis=1)
-        .hide(axis="columns", subset=["_verdict"])  # прячем служебную колонку
+    # Подтверждённые факты по умолчанию скрыты — обычно интересны расхождения.
+    supported_n = sum(1 for f in report.findings if f.verdict == "supported")
+    show_supported = st.checkbox(
+        f"Показывать подтверждённые факты ({supported_n})",
+        value=False,
+        help="По умолчанию в таблице только расхождения: опровергнуто, внутренний конфликт, не найдено.",
     )
+    findings = (
+        report.findings
+        if show_supported
+        else [f for f in report.findings if f.verdict != "supported"]
+    )
+
+    if not findings:
+        st.info("Все факты подтверждены — включите галочку выше, чтобы показать их.")
+        return
+
+    df = _findings_dataframe(findings)
+    verdicts = [f.verdict for f in findings]
+    styler = df.style.apply(_row_styler(verdicts), axis=1)
     st.dataframe(styler, use_container_width=True, hide_index=True)
 
 

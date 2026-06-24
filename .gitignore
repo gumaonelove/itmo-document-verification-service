@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Локальные данные Qdrant (embedded/volume) и оценка
+qdrant_storage/
+eval/results.json

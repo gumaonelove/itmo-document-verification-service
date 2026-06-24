@@ -45,12 +45,16 @@ def verify_claim(claim: Claim, evidences: list[Evidence]) -> Finding:
             reasoning="Нет релевантных фрагментов в источниках",
         )
 
-    # Лучший фрагмент — запасной источник цитаты/идентификаторов.
-    best = max(evidences, key=lambda e: e.score)
+    # В LLM подаём только top-N фрагментов по score (полным текстом — обрезать
+    # нельзя, факт часто в конце фрагмента). Меньше фрагментов = меньше префилл
+    # и меньше шума; релевантный фрагмент почти всегда среди верхних по score.
+    ranked = sorted(evidences, key=lambda e: e.score, reverse=True)
+    used = ranked[: settings.verify_evidence_k]
+    best = ranked[0]
     # Карта source_id → Evidence для сопоставления ответа модели с фрагментом.
-    by_source = {e.source_id: e for e in evidences}
+    by_source = {e.source_id: e for e in used}
 
-    evidence_block = "\n".join(f"[{e.source_id}] {e.quote}" for e in evidences)
+    evidence_block = "\n".join(f"[{e.source_id}] {e.quote}" for e in used)
     messages = [
         {"role": "user", "content": prompts.verify_prompt(claim.text, evidence_block)}
     ]
@@ -94,9 +98,11 @@ def verify_claim(claim: Claim, evidences: list[Evidence]) -> Finding:
         )
 
     # Сопоставляем выбранный моделью source_id с найденным фрагментом; иначе — лучший.
+    # Имя источника берём из РЕАЛЬНОГО фрагмента (matched), а не из ответа модели —
+    # так колонка «Источник» точно указывает на доверенный документ, а не на выдумку.
     chosen_id = data.get("source_id")
     matched = by_source.get(chosen_id, best)
-    source_id = chosen_id or matched.source_id
+    source_id = matched.source_id
     quote = data.get("quote") or matched.quote
 
     evidence = [
@@ -105,6 +111,7 @@ def verify_claim(claim: Claim, evidences: list[Evidence]) -> Finding:
             chunk_id=matched.chunk_id,
             quote=quote,
             score=matched.score,
+            location=matched.location,
         )
     ]
 
